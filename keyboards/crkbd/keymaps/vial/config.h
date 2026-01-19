@@ -42,10 +42,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifdef RGBLIGHT_ENABLE
 #    undef RGBLIGHT_LED_COUNT
 #    define RGBLIGHT_ANIMATIONS
-#    define RGBLIGHT_LED_COUNT 54
+#    define RGBLIGHT_LED_COUNT 42
 #    undef RGBLED_SPLIT
 #    define RGBLED_SPLIT \
-        { 27, 27 }
+        { 21, 21 }
 #    define RGBLIGHT_LIMIT_VAL 120
 #    define RGBLIGHT_HUE_STEP  10
 #    define RGBLIGHT_SAT_STEP  17
