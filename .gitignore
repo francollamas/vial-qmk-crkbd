@@ -35,7 +35,7 @@ quantum/version.h
 *.eep
 *.hex
 *.qmk
-# *.uf2
+*.uf2
 
 *.vfw
 
