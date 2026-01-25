@@ -3,12 +3,12 @@ VIAL_ENABLE         = yes
 LTO_ENABLE          = yes
 EXTRAFLAGS += -flto=auto
 
-MOUSEKEY_ENABLE     = no
+MOUSEKEY_ENABLE     = yes
 OLED_ENABLE         = yes
 EXTRAKEY_ENABLE     = no
 COMBO_ENABLE        = no
 
-QMK_SETTINGS        = no
+QMK_SETTINGS        = yes
 
 CAPS_WORD_ENABLE = no
 LAYER_LOCK_ENABLE = no

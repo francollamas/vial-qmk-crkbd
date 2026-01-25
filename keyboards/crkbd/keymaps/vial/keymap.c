@@ -148,37 +148,37 @@ oled_rotation_t oled_init_user(oled_rotation_t rotation) {
 #    define L_OCTAVA 256
 
 void oled_render_layer_state(void) {
-    oled_write_P(PSTR("Layer: "), false);
+    // oled_write_P(PSTR("Layer: "), false);
     switch (layer_state) {
         case L_BASE:
-            oled_write_ln_P(PSTR("base"), false);
+            oled_write_ln_P(PSTR("BASE"), false);
             break;
         case L_LOWER:
-            oled_write_ln_P(PSTR("primera"), false);
+            oled_write_ln_P(PSTR("NAV"), false);
             break;
         case L_RAISE:
-            oled_write_ln_P(PSTR("segunda"), false);
-            break;
-        case L_CUARTA:
-            oled_write_ln_P(PSTR("cuarta"), false);
-            break;
-        case L_QUINTA:
-            oled_write_ln_P(PSTR("quinta"), false);
-            break;
-        case L_SEXTA:
-            oled_write_ln_P(PSTR("sexta"), false);
-            break;
-        case L_SEPTIMA:
-            oled_write_ln_P(PSTR("septima"), false);
-            break;
-        case L_OCTAVA:
-            oled_write_ln_P(PSTR("octava"), false);
+            oled_write_ln_P(PSTR("MOUSE"), false);
             break;
         case L_ADJUST:
         case L_ADJUST | L_LOWER:
         case L_ADJUST | L_RAISE:
         case L_ADJUST | L_LOWER | L_RAISE:
-            oled_write_ln_P(PSTR("tercera"), false);
+            oled_write_ln_P(PSTR("MEDIA"), false);
+            break;
+        case L_CUARTA:
+            oled_write_ln_P(PSTR("NUM"), false);
+            break;
+        case L_QUINTA:
+            oled_write_ln_P(PSTR("SYM"), false);
+            break;
+        case L_SEXTA:
+            oled_write_ln_P(PSTR("FUN"), false);
+            break;
+        case L_SEPTIMA:
+            oled_write_ln_P(PSTR("BUTTON"), false);
+            break;
+        case L_OCTAVA:
+            oled_write_ln_P(PSTR("TAP"), false);
             break;
     }
 }
@@ -201,7 +201,7 @@ void set_keylog(uint16_t keycode, keyrecord_t *record) {
 }
 
 void oled_render_keylog(void) {
-    oled_write(keylog_str, false);
+    // oled_write(keylog_str, false);
 }
 
 void render_bootmagic_status(bool status) {
