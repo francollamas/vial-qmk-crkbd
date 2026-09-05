@@ -47,11 +47,14 @@
 <body>
     <main>
         <h1>Corne OLED Preview</h1>
-        <p class="lede">A visual simulator for the two portrait OLEDs. It loads the glyphs, scale, and coordinates directly from <code>oled_visuals.h</code>, the header compiled by the firmware.</p>
+        <p class="lede">A visual simulator for the two portrait OLEDs. It loads the icon layout from <code>oled_visuals.h</code> and the 5x7 text font from the same QMK source compiled by the firmware.</p>
         <div class="layout">
             <aside class="panel">
                 <label>Visual source
                     <input id="source-path" type="text" value="../keyboards/crkbd/keymaps/vial/oled_visuals.h">
+                </label>
+                <label>Text font source
+                    <input id="font-path" type="text" value="../keyboards/crkbd/lib/glcdfont.c">
                 </label>
                 <button id="reload" type="button">Reload visual source</button>
                 <fieldset>
@@ -106,6 +109,7 @@
         const WIDTH = 32;
         const HEIGHT = 128;
         const sourcePath = document.querySelector("#source-path");
+        const fontPath = document.querySelector("#font-path");
         const status = document.querySelector("#status");
         const controls = document.querySelectorAll("input, select");
         let visual;
@@ -126,18 +130,25 @@
             return Object.fromEntries([...source.matchAll(/#define\s+OLED_ICON_(\w+)\s+'\\x([\da-f]{2})'/gi)].map(([, name, hex]) => [name, Number.parseInt(hex, 16)]));
         }
 
+        function extractQmkFont(source) {
+            const match = source.match(/const unsigned char font\[\] PROGMEM\s*=\s*\{([\s\S]*?)\n\};/);
+            if (!match) throw new Error("Could not find the QMK font array.");
+            return [...match[1].matchAll(/0x[\da-f]{1,2}/gi)].map(([value]) => Number.parseInt(value, 16));
+        }
+
         function parseVisualSource(source) {
             return {
-                font: extractArray(source, "oled_large_font"),
                 icons: extractArray(source, "oled_large_icons"),
-                symbols: extractArray(source, "oled_large_symbols"),
                 iconsByName: extractIconCodes(source),
-                fontWidth: extractDefine(source, "OLED_LARGE_FONT_WIDTH"),
-                fontHeight: extractDefine(source, "OLED_LARGE_FONT_HEIGHT"),
-                textScale: extractDefine(source, "OLED_TEXT_SCALE"),
+                iconWidth: extractDefine(source, "OLED_ICON_WIDTH"),
+                iconHeight: extractDefine(source, "OLED_ICON_HEIGHT"),
+                textFontStart: extractDefine(source, "OLED_TEXT_FONT_START"),
+                textFontWidth: extractDefine(source, "OLED_TEXT_FONT_WIDTH"),
+                textFontHeight: extractDefine(source, "OLED_TEXT_FONT_HEIGHT"),
+                textLineHeight: extractDefine(source, "OLED_TEXT_LINE_HEIGHT"),
+                textGlyphSpacing: extractDefine(source, "OLED_TEXT_GLYPH_SPACING"),
                 iconScale: extractDefine(source, "OLED_STATUS_ICON_SCALE"),
-                lineHeight: extractDefine(source, "OLED_LINE_HEIGHT"),
-                glyphSpacing: extractDefine(source, "OLED_GLYPH_SPACING"),
+                statusLineHeight: extractDefine(source, "OLED_STATUS_LINE_HEIGHT"),
                 statusIconX: extractDefine(source, "OLED_STATUS_ICON_X"),
             };
         }
@@ -146,25 +157,35 @@
             return Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(false));
         }
 
-        function symbolIndex(char) {
-            return "!@#$%^&*()_+=[]{}\\|;:'\",.<>/?~`".indexOf(char);
-        }
-
-        function glyphRow(char, row) {
-            if (/^[A-Z]$/.test(char)) return visual.font[char.charCodeAt(0) - 65][row];
-            if (/^\d$/.test(char)) return visual.font[char.charCodeAt(0) - 48 + 26][row];
+        function iconGlyphRow(char, row) {
             const iconIndex = Object.values(visual.iconsByName).indexOf(char.charCodeAt(0));
             if (iconIndex !== -1) return visual.icons[iconIndex][row];
-            if (char === "-") return row === 2 ? 7 : 0;
-            const index = symbolIndex(char);
-            return index === -1 ? 0 : visual.symbols[index][row];
+            return 0;
         }
 
-        function drawGlyph(buffer, x, y, char, scale) {
-            for (let row = 0; row < visual.fontHeight; row++) {
-                const pixels = glyphRow(char, row);
-                for (let column = 0; column < visual.fontWidth; column++) {
-                    if (!(pixels & (1 << (visual.fontWidth - 1 - column)))) continue;
+        function drawIcon(buffer, x, y, char, scale) {
+            for (let row = 0; row < visual.iconHeight; row++) {
+                const pixels = iconGlyphRow(char, row);
+                for (let column = 0; column < visual.iconWidth; column++) {
+                    if (!(pixels & (1 << (visual.iconWidth - 1 - column)))) continue;
+                    for (let pixelY = 0; pixelY < scale; pixelY++) {
+                        for (let pixelX = 0; pixelX < scale; pixelX++) {
+                            const targetX = x + column * scale + pixelX;
+                            const targetY = y + row * scale + pixelY;
+                            if (targetX < WIDTH && targetY < HEIGHT) buffer[targetY][targetX] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawTextGlyph(buffer, x, y, char, scale = 1) {
+            const code = char.charCodeAt(0);
+            if (code < 32 || code > 126) return;
+            for (let column = 0; column < visual.textFontWidth; column++) {
+                const pixels = visual.font[(code - visual.textFontStart) * visual.textFontWidth + column];
+                for (let row = 0; row < visual.textFontHeight; row++) {
+                    if (!(pixels & (1 << row))) continue;
                     for (let pixelY = 0; pixelY < scale; pixelY++) {
                         for (let pixelX = 0; pixelX < scale; pixelX++) {
                             const targetX = x + column * scale + pixelX;
@@ -177,19 +198,19 @@
         }
 
         function drawLine(buffer, line, value) {
-            [...value.toUpperCase().padEnd(4).slice(0, 4)].forEach((char, index) => drawGlyph(buffer, index * visual.glyphSpacing, line * visual.lineHeight, char, visual.textScale));
+            [...value.toUpperCase().padEnd(4).slice(0, 4)].forEach((char, index) => drawTextGlyph(buffer, index * visual.textGlyphSpacing, line * visual.textLineHeight, char));
         }
 
         function drawStatusIcon(buffer, line, icon) {
-            drawGlyph(buffer, visual.statusIconX, line * visual.lineHeight, String.fromCharCode(icon), visual.iconScale);
+            drawIcon(buffer, visual.statusIconX, line * visual.statusLineHeight, String.fromCharCode(icon), visual.iconScale);
         }
 
         function renderStatus() {
             const buffer = framebuffer();
             const icon = visual.iconsByName[document.querySelector("#layer").value];
             if (icon === visual.iconsByName.FUN) {
-                drawGlyph(buffer, 7, 0, "F", visual.iconScale);
-                drawGlyph(buffer, 17, 0, "N", visual.iconScale);
+                drawTextGlyph(buffer, 4, 1, "F", 2);
+                drawTextGlyph(buffer, 16, 1, "N", 2);
             } else {
                 drawStatusIcon(buffer, 0, icon);
             }
@@ -235,7 +256,10 @@
             try {
                 const response = await fetch(`${sourcePath.value}?t=${Date.now()}`);
                 if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-                visual = parseVisualSource(await response.text());
+                const [visualSource, fontSource] = await Promise.all([response.text(), fetch(`${fontPath.value}?t=${Date.now()}`)]);
+                if (!fontSource.ok) throw new Error(`${fontSource.status} ${fontSource.statusText}`);
+                visual = parseVisualSource(visualSource);
+                visual.font = extractQmkFont(await fontSource.text());
                 render();
                 status.textContent = `Loaded glyphs and layout from ${sourcePath.value}.`;
             } catch (error) {
