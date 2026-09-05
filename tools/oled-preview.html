@@ -83,11 +83,11 @@
                 <fieldset>
                     <legend>Right key history</legend>
                     <div class="history">
-                        <label><span>Newest</span><input class="history-key" type="text" value="@" maxlength="4"></label>
-                        <label><span>2</span><input class="history-key" type="text" value="!" maxlength="4"></label>
-                        <label><span>3</span><input class="history-key" type="text" value="A" maxlength="4"></label>
-                        <label><span>4</span><input class="history-key" type="text" value="SPC" maxlength="4"></label>
-                        <label><span>5</span><input class="history-key" type="text" value="ENT" maxlength="4"></label>
+                        <label><span>Newest</span><input class="history-key" type="text" value="@" maxlength="3"></label>
+                        <label><span>2</span><input class="history-key" type="text" value="!" maxlength="3"></label>
+                        <label><span>3</span><input class="history-key" type="text" value="A" maxlength="3"></label>
+                        <label><span>4</span><input class="history-key" type="text" value="SPC" maxlength="3"></label>
+                        <label><span>5</span><input class="history-key" type="text" value="ENT" maxlength="3"></label>
                     </div>
                 </fieldset>
             </aside>
@@ -117,7 +117,7 @@
         function extractArray(source, name) {
             const match = source.match(new RegExp(`${name}\\s*\\[\\][^=]*=\\s*\\{([\\s\\S]*?)\\n\\};`));
             if (!match) throw new Error(`Could not find ${name}.`);
-            return [...match[1].matchAll(/\{([^{}]+)\}/g)].map(([, row]) => [...row.matchAll(/\b\d+\b/g)].map(([value]) => Number(value)));
+            return [...match[1].matchAll(/\{([^{}]+)\}/g)].map(([, row]) => [...row.matchAll(/0x[\da-f]+|\b\d+\b/gi)].map(([value]) => Number(value)));
         }
 
         function extractDefine(source, name) {
@@ -145,9 +145,10 @@
                 textFontStart: extractDefine(source, "OLED_TEXT_FONT_START"),
                 textFontWidth: extractDefine(source, "OLED_TEXT_FONT_WIDTH"),
                 textFontHeight: extractDefine(source, "OLED_TEXT_FONT_HEIGHT"),
-                textLineHeight: extractDefine(source, "OLED_TEXT_LINE_HEIGHT"),
-                textGlyphSpacing: extractDefine(source, "OLED_TEXT_GLYPH_SPACING"),
-                iconScale: extractDefine(source, "OLED_STATUS_ICON_SCALE"),
+                historyTextScale: extractDefine(source, "OLED_HISTORY_TEXT_SCALE"),
+                historyLineHeight: extractDefine(source, "OLED_HISTORY_LINE_HEIGHT"),
+                historyGlyphSpacing: extractDefine(source, "OLED_HISTORY_GLYPH_SPACING"),
+                historyTextX: extractDefine(source, "OLED_HISTORY_TEXT_X"),
                 statusLineHeight: extractDefine(source, "OLED_STATUS_LINE_HEIGHT"),
                 statusIconX: extractDefine(source, "OLED_STATUS_ICON_X"),
             };
@@ -163,18 +164,14 @@
             return 0;
         }
 
-        function drawIcon(buffer, x, y, char, scale) {
+        function drawIcon(buffer, x, y, char) {
             for (let row = 0; row < visual.iconHeight; row++) {
                 const pixels = iconGlyphRow(char, row);
                 for (let column = 0; column < visual.iconWidth; column++) {
                     if (!(pixels & (1 << (visual.iconWidth - 1 - column)))) continue;
-                    for (let pixelY = 0; pixelY < scale; pixelY++) {
-                        for (let pixelX = 0; pixelX < scale; pixelX++) {
-                            const targetX = x + column * scale + pixelX;
-                            const targetY = y + row * scale + pixelY;
-                            if (targetX < WIDTH && targetY < HEIGHT) buffer[targetY][targetX] = true;
-                        }
-                    }
+                    const targetX = x + column;
+                    const targetY = y + row;
+                    if (targetX < WIDTH && targetY < HEIGHT) buffer[targetY][targetX] = true;
                 }
             }
         }
@@ -198,11 +195,11 @@
         }
 
         function drawLine(buffer, line, value) {
-            [...value.toUpperCase().padEnd(4).slice(0, 4)].forEach((char, index) => drawTextGlyph(buffer, index * visual.textGlyphSpacing, line * visual.textLineHeight, char));
+            [...value.toUpperCase().padEnd(3).slice(0, 3)].forEach((char, index) => drawTextGlyph(buffer, visual.historyTextX + index * visual.historyGlyphSpacing, line * visual.historyLineHeight, char, visual.historyTextScale));
         }
 
         function drawStatusIcon(buffer, line, icon) {
-            drawIcon(buffer, visual.statusIconX, line * visual.statusLineHeight, String.fromCharCode(icon), visual.iconScale);
+            drawIcon(buffer, visual.statusIconX, line * visual.statusLineHeight, String.fromCharCode(icon));
         }
 
         function renderStatus() {

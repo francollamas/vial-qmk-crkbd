@@ -290,36 +290,36 @@ static void oled_write_key_label(uint8_t line, oled_key_history_entry_t entry) {
         return;
     }
     if (symbol) {
-        oled_draw_text_line(line, symbol, ' ', ' ', ' ');
+        oled_draw_history_line(line, symbol, ' ', ' ');
         return;
     }
 
     if (keycode >= KC_A && keycode <= KC_Z) {
-        oled_draw_text_line(line, 'A' + keycode - KC_A, ' ', ' ', ' ');
+        oled_draw_history_line(line, 'A' + keycode - KC_A, ' ', ' ');
         return;
     }
 
     switch (keycode) {
-        case KC_SPC: oled_draw_text_line(line, 'S', 'P', 'C', ' '); break;
-        case KC_ENT: oled_draw_text_line(line, 'E', 'N', 'T', ' '); break;
-        case KC_BSPC: oled_draw_text_line(line, 'B', 'S', 'P', ' '); break;
-        case KC_TAB: oled_draw_text_line(line, 'T', 'A', 'B', ' '); break;
-        case KC_ESC: oled_draw_text_line(line, 'E', 'S', 'C', ' '); break;
-        case KC_LEFT: oled_draw_text_line(line, 'L', 'E', 'F', 'T'); break;
-        case KC_RGHT: oled_draw_text_line(line, 'R', 'G', 'H', 'T'); break;
-        case KC_UP: oled_draw_text_line(line, 'U', 'P', ' ', ' '); break;
-        case KC_DOWN: oled_draw_text_line(line, 'D', 'O', 'W', 'N'); break;
+        case KC_SPC: oled_draw_history_line(line, 'S', 'P', 'C'); break;
+        case KC_ENT: oled_draw_history_line(line, 'E', 'N', 'T'); break;
+        case KC_BSPC: oled_draw_history_line(line, 'B', 'S', 'P'); break;
+        case KC_TAB: oled_draw_history_line(line, 'T', 'A', 'B'); break;
+        case KC_ESC: oled_draw_history_line(line, 'E', 'S', 'C'); break;
+        case KC_LEFT: oled_draw_history_line(line, 'L', 'F', 'T'); break;
+        case KC_RGHT: oled_draw_history_line(line, 'R', 'G', 'T'); break;
+        case KC_UP: oled_draw_history_line(line, 'U', 'P', ' '); break;
+        case KC_DOWN: oled_draw_history_line(line, 'D', 'W', 'N'); break;
         case KC_LCTL:
-        case KC_RCTL: oled_draw_text_line(line, 'C', 'T', 'R', 'L'); break;
+        case KC_RCTL: oled_draw_history_line(line, 'C', 'T', 'L'); break;
         case KC_LALT:
-        case KC_RALT: oled_draw_text_line(line, 'A', 'L', 'T', ' '); break;
+        case KC_RALT: oled_draw_history_line(line, 'A', 'L', 'T'); break;
         case KC_LGUI:
-        case KC_RGUI: oled_draw_text_line(line, 'G', 'U', 'I', ' '); break;
+        case KC_RGUI: oled_draw_history_line(line, 'G', 'U', 'I'); break;
         case KC_LSFT:
-        case KC_RSFT: oled_draw_text_line(line, 'S', 'H', 'F', 'T'); break;
-        case TL_LOWR: oled_draw_text_line(line, 'L', 'O', 'W', 'R'); break;
-        case TL_UPPR: oled_draw_text_line(line, 'U', 'P', 'P', 'R'); break;
-        default: oled_draw_text_line(line, '-', '-', '-', '-'); break;
+        case KC_RSFT: oled_draw_history_line(line, 'S', 'F', 'T'); break;
+        case TL_LOWR: oled_draw_history_line(line, 'L', 'W', 'R'); break;
+        case TL_UPPR: oled_draw_history_line(line, 'U', 'P', 'R'); break;
+        default: oled_draw_history_line(line, '-', '-', '-'); break;
     }
 }
 
