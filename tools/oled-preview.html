@@ -250,12 +250,7 @@
         function renderStatus() {
             const buffer = framebuffer();
             const icon = visual.iconsByName[document.querySelector("#layer").value];
-            if (icon === visual.iconsByName.FUN) {
-                drawTextGlyph(buffer, 4, 1, "F", 2);
-                drawTextGlyph(buffer, 16, 1, "N", 2);
-            } else {
-                drawStatusIcon(buffer, visual.statusCenterX, visual.statusLayerY, icon);
-            }
+            drawStatusIcon(buffer, visual.statusCenterX, visual.statusLayerY, icon);
             if (document.querySelector("#caps").checked) drawStatusIcon(buffer, visual.statusCenterX, visual.statusCapsY, visual.iconsByName.CAPS);
             if (document.querySelector("#ctrl").checked) drawStatusIcon(buffer, visual.statusLeftX, visual.statusTopModsY, visual.iconsByName.CTRL);
             if (document.querySelector("#alt").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusTopModsY, visual.iconsByName.ALT);
