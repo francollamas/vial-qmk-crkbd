@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Corne OLED Logo Preview</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: #10120f;
+            color: #e9eee5;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+
+        main { width: min(100%, 760px); }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: clamp(1.25rem, 3vw, 2rem);
+            letter-spacing: -0.06em;
+        }
+
+        p { color: #a9b2a3; line-height: 1.5; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 24px 0;
+        }
+
+        input, button {
+            font: inherit;
+            border: 1px solid #4d5848;
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+
+        input {
+            min-width: 0;
+            flex: 1;
+            color: inherit;
+            background: #191d17;
+        }
+
+        button {
+            cursor: pointer;
+            color: #10120f;
+            font-weight: 700;
+            background: #b9e97b;
+        }
+
+        .screen {
+            overflow: auto;
+            padding: clamp(16px, 5vw, 40px);
+            border: 1px solid #4d5848;
+            border-radius: 12px;
+            background: #20261d;
+            box-shadow: 0 20px 60px #0008;
+        }
+
+        canvas {
+            display: block;
+            width: min(100%, 640px);
+            height: auto;
+            margin: auto;
+            image-rendering: pixelated;
+            background: #c7e6b7;
+        }
+
+        #status {
+            min-height: 1.5em;
+            margin: 14px 0 0;
+            color: #b9e97b;
+            font-size: 0.875rem;
+        }
+
+        #status.error { color: #ffb4a9; }
+
+        code { color: #d3ffc0; }
+
+        @media (max-width: 520px) {
+            body { padding: 16px; }
+            .controls { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Corne OLED logo</h1>
+        <p>Renders <code>mb_logo</code> directly from the firmware source. Edit the C array, then press Reload.</p>
+        <div class="controls">
+            <input id="source-path" value="../keyboards/crkbd/keymaps/vial/keymap.c" aria-label="Source file path">
+            <button id="reload" type="button">Reload</button>
+        </div>
+        <div class="screen"><canvas id="logo" width="128" height="32" aria-label="Rendered OLED logo"></canvas></div>
+        <p id="status" role="status">Loading source...</p>
+        <p>Run from the repository root: <code>python3 -m http.server</code>, then open <code>http://localhost:8000/tools/oled-logo-preview.html</code>.</p>
+    </main>
+    <script>
+        const width = 128;
+        const height = 32;
+        const canvas = document.querySelector("#logo");
+        const context = canvas.getContext("2d");
+        const pathInput = document.querySelector("#source-path");
+        const status = document.querySelector("#status");
+
+        function extractLogo(source) {
+            const match = source.match(/mb_logo\s*\[\s*\]\s*=\s*\{([\s\S]*?)\};/);
+            if (!match) throw new Error("Could not find the mb_logo array.");
+
+            const bytes = [...match[1].matchAll(/0x[\da-f]{1,2}/gi)].map(([value]) => Number.parseInt(value, 16));
+            if (bytes.length !== (width * height) / 8) {
+                throw new Error(`Expected 512 bytes for a ${width}x${height} OLED, found ${bytes.length}.`);
+            }
+            return bytes;
+        }
+
+        function drawLogo(bytes) {
+            const image = context.createImageData(width, height);
+            for (let page = 0; page < height / 8; page++) {
+                for (let x = 0; x < width; x++) {
+                    const byte = bytes[page * width + x];
+                    for (let bit = 0; bit < 8; bit++) {
+                        const pixel = ((page * 8 + bit) * width + x) * 4;
+                        const on = byte & (1 << bit);
+                        image.data[pixel] = on ? 27 : 199;
+                        image.data[pixel + 1] = on ? 45 : 230;
+                        image.data[pixel + 2] = on ? 24 : 183;
+                        image.data[pixel + 3] = 255;
+                    }
+                }
+            }
+            context.putImageData(image, 0, 0);
+        }
+
+        async function reload() {
+            status.classList.remove("error");
+            status.textContent = "Loading source...";
+            try {
+                const response = await fetch(`${pathInput.value}?t=${Date.now()}`);
+                if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+                const bytes = extractLogo(await response.text());
+                drawLogo(bytes);
+                status.textContent = `Rendered ${bytes.length} bytes from ${pathInput.value}.`;
+            } catch (error) {
+                status.classList.add("error");
+                status.textContent = `Unable to render: ${error.message}`;
+            }
+        }
+
+        document.querySelector("#reload").addEventListener("click", reload);
+        pathInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") reload();
+        });
+        reload();
+    </script>
+</body>
+</html>
