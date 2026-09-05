@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Corne OLED Preview</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: #101310;
+            color: #e8eee4;
+        }
+
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 28px; }
+        main { width: min(100%, 1050px); margin: auto; }
+        h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.5rem); letter-spacing: -0.08em; }
+        .lede { max-width: 68ch; color: #aeb7a9; line-height: 1.55; }
+        .layout { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; margin-top: 28px; }
+        .panel, .display-card { border: 1px solid #3f4a3e; background: #181d18; border-radius: 12px; }
+        .panel { padding: 18px; }
+        .panel h2, .display-card h2 { margin: 0 0 14px; font-size: .75rem; letter-spacing: .12em; color: #b8d980; text-transform: uppercase; }
+        label { display: grid; gap: 7px; margin: 0 0 14px; color: #c4ccc0; font-size: .82rem; }
+        input, select, button { font: inherit; }
+        input[type="text"], select { width: 100%; color: #e8eee4; background: #101310; border: 1px solid #4d594a; border-radius: 6px; padding: 8px; }
+        input[type="checkbox"] { accent-color: #cbe98f; }
+        fieldset { margin: 18px 0; padding: 12px; border: 1px solid #3f4a3e; border-radius: 8px; }
+        legend { padding: 0 6px; color: #aeb7a9; font-size: .75rem; }
+        .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .checks label { display: flex; align-items: center; gap: 7px; margin: 0; }
+        button { cursor: pointer; border: 0; border-radius: 6px; padding: 9px 11px; color: #12170f; background: #cbe98f; font-weight: 700; }
+        .history { display: grid; gap: 8px; }
+        .history label { display: grid; grid-template-columns: 56px 1fr; align-items: center; margin: 0; }
+        .history span { color: #8f998b; }
+        .displays { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+        .display-card { min-width: 0; padding: 16px; }
+        .oled-shell { display: grid; place-items: center; min-height: 530px; border-radius: 8px; background: linear-gradient(135deg, #080a08, #252b24); box-shadow: inset 0 0 0 10px #070907, inset 0 0 28px #000; }
+        canvas { width: 192px; height: 512px; image-rendering: pixelated; background: #b8d995; box-shadow: 0 0 28px #b8d99533; }
+        #status { margin: 20px 0 0; color: #b8d980; font-size: .8rem; }
+        #status.error { color: #ffb4a9; }
+        code { color: #d9f9a0; }
+        @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+        @media (max-width: 550px) { body { padding: 16px; } .displays { gap: 12px; } .oled-shell { min-height: 350px; } canvas { width: 120px; height: 320px; } }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>Corne OLED Preview</h1>
+        <p class="lede">A visual simulator for the two portrait OLEDs. It loads the glyphs, scale, and coordinates directly from <code>oled_visuals.h</code>, the header compiled by the firmware.</p>
+        <div class="layout">
+            <aside class="panel">
+                <label>Visual source
+                    <input id="source-path" type="text" value="../keyboards/crkbd/keymaps/vial/oled_visuals.h">
+                </label>
+                <button id="reload" type="button">Reload visual source</button>
+                <fieldset>
+                    <legend>Left status OLED</legend>
+                    <label>Active layer
+                        <select id="layer">
+                            <option value="BASE">Base</option>
+                            <option value="NAV">Navigation</option>
+                            <option value="MOUSE">Mouse</option>
+                            <option value="MEDIA">Media</option>
+                            <option value="NUM">Numbers</option>
+                            <option value="SYM">Symbols</option>
+                            <option value="FUN">Functions</option>
+                            <option value="BUTTON">Buttons</option>
+                            <option value="TAP">Tap</option>
+                        </select>
+                    </label>
+                    <div class="checks">
+                        <label><input id="caps" type="checkbox">Caps Word</label>
+                        <label><input id="ctrl" type="checkbox">Ctrl</label>
+                        <label><input id="alt" type="checkbox">Alt</label>
+                        <label><input id="gui" type="checkbox">Gui</label>
+                        <label><input id="shift" type="checkbox">Shift</label>
+                    </div>
+                </fieldset>
+                <fieldset>
+                    <legend>Right key history</legend>
+                    <div class="history">
+                        <label><span>Newest</span><input class="history-key" type="text" value="@" maxlength="4"></label>
+                        <label><span>2</span><input class="history-key" type="text" value="!" maxlength="4"></label>
+                        <label><span>3</span><input class="history-key" type="text" value="A" maxlength="4"></label>
+                        <label><span>4</span><input class="history-key" type="text" value="SPC" maxlength="4"></label>
+                        <label><span>5</span><input class="history-key" type="text" value="ENT" maxlength="4"></label>
+                    </div>
+                </fieldset>
+            </aside>
+            <section class="displays" aria-label="OLED previews">
+                <article class="display-card">
+                    <h2>Left: Status</h2>
+                    <div class="oled-shell"><canvas id="left" width="32" height="128" aria-label="Left OLED status preview"></canvas></div>
+                </article>
+                <article class="display-card">
+                    <h2>Right: History</h2>
+                    <div class="oled-shell"><canvas id="right" width="32" height="128" aria-label="Right OLED history preview"></canvas></div>
+                </article>
+            </section>
+        </div>
+        <p id="status" role="status">Loading visual source...</p>
+        <p>Serve the repository: <code>python3 -m http.server</code>, then open <code>http://localhost:8000/tools/oled-preview.html</code>.</p>
+    </main>
+    <script>
+        const WIDTH = 32;
+        const HEIGHT = 128;
+        const sourcePath = document.querySelector("#source-path");
+        const status = document.querySelector("#status");
+        const controls = document.querySelectorAll("input, select");
+        let visual;
+
+        function extractArray(source, name) {
+            const match = source.match(new RegExp(`${name}\\s*\\[\\][^=]*=\\s*\\{([\\s\\S]*?)\\n\\};`));
+            if (!match) throw new Error(`Could not find ${name}.`);
+            return [...match[1].matchAll(/\{([^{}]+)\}/g)].map(([, row]) => [...row.matchAll(/\b\d+\b/g)].map(([value]) => Number(value)));
+        }
+
+        function extractDefine(source, name) {
+            const match = source.match(new RegExp(`#define\\s+${name}\\s+(\\d+)`));
+            if (!match) throw new Error(`Could not find ${name}.`);
+            return Number(match[1]);
+        }
+
+        function extractIconCodes(source) {
+            return Object.fromEntries([...source.matchAll(/#define\s+OLED_ICON_(\w+)\s+'\\x([\da-f]{2})'/gi)].map(([, name, hex]) => [name, Number.parseInt(hex, 16)]));
+        }
+
+        function parseVisualSource(source) {
+            return {
+                font: extractArray(source, "oled_large_font"),
+                icons: extractArray(source, "oled_large_icons"),
+                symbols: extractArray(source, "oled_large_symbols"),
+                iconsByName: extractIconCodes(source),
+                fontWidth: extractDefine(source, "OLED_LARGE_FONT_WIDTH"),
+                fontHeight: extractDefine(source, "OLED_LARGE_FONT_HEIGHT"),
+                textScale: extractDefine(source, "OLED_TEXT_SCALE"),
+                iconScale: extractDefine(source, "OLED_STATUS_ICON_SCALE"),
+                lineHeight: extractDefine(source, "OLED_LINE_HEIGHT"),
+                glyphSpacing: extractDefine(source, "OLED_GLYPH_SPACING"),
+                statusIconX: extractDefine(source, "OLED_STATUS_ICON_X"),
+            };
+        }
+
+        function framebuffer() {
+            return Array.from({ length: HEIGHT }, () => Array(WIDTH).fill(false));
+        }
+
+        function symbolIndex(char) {
+            return "!@#$%^&*()_+=[]{}\\|;:'\",.<>/?~`".indexOf(char);
+        }
+
+        function glyphRow(char, row) {
+            if (/^[A-Z]$/.test(char)) return visual.font[char.charCodeAt(0) - 65][row];
+            if (/^\d$/.test(char)) return visual.font[char.charCodeAt(0) - 48 + 26][row];
+            const iconIndex = Object.values(visual.iconsByName).indexOf(char.charCodeAt(0));
+            if (iconIndex !== -1) return visual.icons[iconIndex][row];
+            if (char === "-") return row === 2 ? 7 : 0;
+            const index = symbolIndex(char);
+            return index === -1 ? 0 : visual.symbols[index][row];
+        }
+
+        function drawGlyph(buffer, x, y, char, scale) {
+            for (let row = 0; row < visual.fontHeight; row++) {
+                const pixels = glyphRow(char, row);
+                for (let column = 0; column < visual.fontWidth; column++) {
+                    if (!(pixels & (1 << (visual.fontWidth - 1 - column)))) continue;
+                    for (let pixelY = 0; pixelY < scale; pixelY++) {
+                        for (let pixelX = 0; pixelX < scale; pixelX++) {
+                            const targetX = x + column * scale + pixelX;
+                            const targetY = y + row * scale + pixelY;
+                            if (targetX < WIDTH && targetY < HEIGHT) buffer[targetY][targetX] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawLine(buffer, line, value) {
+            [...value.toUpperCase().padEnd(4).slice(0, 4)].forEach((char, index) => drawGlyph(buffer, index * visual.glyphSpacing, line * visual.lineHeight, char, visual.textScale));
+        }
+
+        function drawStatusIcon(buffer, line, icon) {
+            drawGlyph(buffer, visual.statusIconX, line * visual.lineHeight, String.fromCharCode(icon), visual.iconScale);
+        }
+
+        function renderStatus() {
+            const buffer = framebuffer();
+            const icon = visual.iconsByName[document.querySelector("#layer").value];
+            if (icon === visual.iconsByName.FUN) {
+                drawGlyph(buffer, 7, 0, "F", visual.iconScale);
+                drawGlyph(buffer, 17, 0, "N", visual.iconScale);
+            } else {
+                drawStatusIcon(buffer, 0, icon);
+            }
+            if (document.querySelector("#caps").checked) drawStatusIcon(buffer, 2, visual.iconsByName.CAPS);
+            if (document.querySelector("#ctrl").checked) drawStatusIcon(buffer, 4, visual.iconsByName.CTRL);
+            if (document.querySelector("#alt").checked) drawStatusIcon(buffer, 5, visual.iconsByName.ALT);
+            if (document.querySelector("#gui").checked) drawStatusIcon(buffer, 6, visual.iconsByName.GUI);
+            if (document.querySelector("#shift").checked) drawStatusIcon(buffer, 7, visual.iconsByName.SHIFT);
+            return buffer;
+        }
+
+        function renderHistory() {
+            const buffer = framebuffer();
+            document.querySelectorAll(".history-key").forEach((input, line) => drawLine(buffer, line, input.value));
+            return buffer;
+        }
+
+        function drawCanvas(canvas, buffer) {
+            const context = canvas.getContext("2d");
+            const image = context.createImageData(WIDTH, HEIGHT);
+            for (let y = 0; y < HEIGHT; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    const offset = (y * WIDTH + x) * 4;
+                    const on = buffer[y][x];
+                    image.data[offset] = on ? 22 : 184;
+                    image.data[offset + 1] = on ? 36 : 217;
+                    image.data[offset + 2] = on ? 19 : 149;
+                    image.data[offset + 3] = 255;
+                }
+            }
+            context.putImageData(image, 0, 0);
+        }
+
+        function render() {
+            if (!visual) return;
+            drawCanvas(document.querySelector("#left"), renderStatus());
+            drawCanvas(document.querySelector("#right"), renderHistory());
+        }
+
+        async function reload() {
+            status.classList.remove("error");
+            status.textContent = "Loading visual source...";
+            try {
+                const response = await fetch(`${sourcePath.value}?t=${Date.now()}`);
+                if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+                visual = parseVisualSource(await response.text());
+                render();
+                status.textContent = `Loaded glyphs and layout from ${sourcePath.value}.`;
+            } catch (error) {
+                status.classList.add("error");
+                status.textContent = `Unable to load preview: ${error.message}`;
+            }
+        }
+
+        document.querySelector("#reload").addEventListener("click", reload);
+        controls.forEach((control) => control.addEventListener("input", render));
+        sourcePath.addEventListener("keydown", (event) => { if (event.key === "Enter") reload(); });
+        reload();
+    </script>
+</body>
+</html>
