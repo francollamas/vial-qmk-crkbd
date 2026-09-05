@@ -128,13 +128,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {[0] = LAYOUT_split
                                                                   )};
 
 #ifdef OLED_ENABLE
-#    include <stdio.h>
+#    include <string.h>
+
+#    include "transactions.h"
 
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
-    if (!is_keyboard_master()) {
-        return OLED_ROTATION_180; // flips the display 180 degrees if offhand
-    }
-    return rotation;
+    (void)rotation;
+    return OLED_ROTATION_270;
 }
 
 #    define L_BASE 0
@@ -147,61 +147,345 @@ oled_rotation_t oled_init_user(oled_rotation_t rotation) {
 #    define L_SEPTIMA 128
 #    define L_OCTAVA 256
 
-void oled_render_layer_state(void) {
-    // oled_write_P(PSTR("Layer: "), false);
-    switch (layer_state) {
-        case L_BASE:
-            oled_write_ln_P(PSTR("BASE"), false);
-            break;
-        case L_LOWER:
-            oled_write_ln_P(PSTR("NAV"), false);
-            break;
-        case L_RAISE:
-            oled_write_ln_P(PSTR("MOUSE"), false);
-            break;
-        case L_ADJUST:
-        case L_ADJUST | L_LOWER:
-        case L_ADJUST | L_RAISE:
-        case L_ADJUST | L_LOWER | L_RAISE:
-            oled_write_ln_P(PSTR("MEDIA"), false);
-            break;
-        case L_CUARTA:
-            oled_write_ln_P(PSTR("NUM"), false);
-            break;
-        case L_QUINTA:
-            oled_write_ln_P(PSTR("SYM"), false);
-            break;
-        case L_SEXTA:
-            oled_write_ln_P(PSTR("FUN"), false);
-            break;
-        case L_SEPTIMA:
-            oled_write_ln_P(PSTR("BUTTON"), false);
-            break;
-        case L_OCTAVA:
-            oled_write_ln_P(PSTR("TAP"), false);
-            break;
+#    define OLED_ICON_BASE   '\xE0'
+#    define OLED_ICON_NAV    '\xE1'
+#    define OLED_ICON_MOUSE  '\xE2'
+#    define OLED_ICON_MEDIA  '\xE3'
+#    define OLED_ICON_NUM    '\xE4'
+#    define OLED_ICON_SYM    '\xE5'
+#    define OLED_ICON_FUN    '\xE6'
+#    define OLED_ICON_BUTTON '\xE7'
+#    define OLED_ICON_TAP    '\xE8'
+#    define OLED_ICON_CAPS   '\xE9'
+#    define OLED_ICON_CTRL   '\xEA'
+#    define OLED_ICON_ALT    '\xEB'
+#    define OLED_ICON_GUI    '\xEC'
+#    define OLED_ICON_SHIFT  '\xED'
+
+#    define OLED_KEY_HISTORY_SIZE 5
+
+typedef struct {
+    uint16_t keycode;
+    uint8_t  mods;
+} oled_key_history_entry_t;
+
+typedef struct {
+    oled_key_history_entry_t keys[OLED_KEY_HISTORY_SIZE];
+} oled_key_history_t;
+
+static oled_key_history_t key_history;
+static bool               key_history_needs_sync;
+
+static const uint8_t PROGMEM oled_large_font[][5] = {
+    {2, 5, 7, 5, 5}, {6, 5, 6, 5, 6}, {3, 4, 4, 4, 3}, {6, 5, 5, 5, 6}, {7, 4, 6, 4, 7}, {7, 4, 6, 4, 4},
+    {3, 4, 5, 5, 3}, {5, 5, 7, 5, 5}, {7, 2, 2, 2, 7}, {1, 1, 1, 5, 2}, {5, 5, 6, 5, 5}, {4, 4, 4, 4, 7},
+    {5, 7, 7, 5, 5}, {5, 7, 7, 7, 5}, {2, 5, 5, 5, 2}, {6, 5, 6, 4, 4}, {2, 5, 5, 7, 3}, {6, 5, 6, 5, 5},
+    {3, 4, 2, 1, 6}, {7, 2, 2, 2, 2}, {5, 5, 5, 5, 7}, {5, 5, 5, 5, 2}, {5, 5, 7, 7, 5}, {5, 5, 2, 5, 5},
+    {5, 5, 2, 2, 2}, {7, 1, 2, 4, 7}, {2, 6, 2, 2, 7}, {6, 1, 2, 4, 7}, {6, 1, 2, 1, 6}, {5, 5, 7, 1, 1},
+    {7, 4, 6, 1, 6}, {3, 4, 6, 5, 2}, {7, 1, 2, 4, 4}, {2, 5, 2, 5, 2}, {2, 5, 3, 1, 6}, {2, 5, 5, 5, 2},
+};
+
+static const uint8_t PROGMEM oled_large_icons[][5] = {
+    {2, 7, 7, 5, 5}, {2, 3, 7, 3, 2}, {2, 7, 5, 5, 2}, {2, 3, 2, 2, 6}, {5, 7, 5, 7, 5}, {7, 5, 7, 4, 3}, {7, 4, 6, 4, 4},
+    {2, 5, 5, 5, 2}, {2, 7, 2, 2, 2}, {2, 7, 2, 2, 7}, {2, 5, 0, 0, 0}, {1, 1, 7, 2, 4}, {2, 5, 2, 5, 2}, {2, 5, 2, 2, 2},
+};
+
+static const uint8_t PROGMEM oled_large_symbols[][5] = {
+    {2, 2, 2, 0, 2}, {7, 5, 7, 4, 3}, {5, 7, 5, 7, 5}, {7, 6, 3, 6, 7}, {5, 1, 2, 4, 5}, {2, 5, 0, 0, 0}, {2, 5, 2, 5, 3}, {0, 5, 2, 5, 0},
+    {1, 2, 2, 2, 1}, {4, 2, 2, 2, 4}, {0, 0, 0, 0, 7}, {0, 2, 7, 2, 0}, {0, 7, 0, 7, 0}, {6, 4, 4, 4, 6}, {3, 1, 1, 1, 3}, {3, 2, 6, 2, 3},
+    {6, 2, 3, 2, 6}, {4, 2, 1, 2, 4}, {2, 2, 2, 0, 2}, {0, 2, 0, 2, 0}, {2, 2, 0, 0, 0}, {5, 5, 0, 0, 0}, {0, 0, 0, 2, 4}, {0, 0, 0, 0, 2},
+    {1, 2, 4, 2, 1}, {4, 2, 1, 2, 4}, {1, 2, 4, 2, 1}, {6, 1, 2, 0, 2}, {0, 2, 5, 0, 0}, {2, 5, 0, 0, 0},
+};
+
+static uint8_t oled_large_glyph_row(char glyph, uint8_t row) {
+    uint8_t glyph_index;
+
+    if (glyph >= 'A' && glyph <= 'Z') {
+        glyph_index = glyph - 'A';
+        return pgm_read_byte(&oled_large_font[glyph_index][row]);
+    }
+    if (glyph >= '0' && glyph <= '9') {
+        glyph_index = glyph - '0' + 26;
+        return pgm_read_byte(&oled_large_font[glyph_index][row]);
+    }
+    if ((uint8_t)glyph >= (uint8_t)OLED_ICON_BASE && (uint8_t)glyph <= (uint8_t)OLED_ICON_SHIFT) {
+        glyph_index = (uint8_t)glyph - (uint8_t)OLED_ICON_BASE;
+        return pgm_read_byte(&oled_large_icons[glyph_index][row]);
+    }
+    if (glyph == '-') {
+        return row == 2 ? 7 : 0;
+    }
+    switch (glyph) {
+        case '!': glyph_index = 0; break;
+        case '@': glyph_index = 1; break;
+        case '#': glyph_index = 2; break;
+        case '$': glyph_index = 3; break;
+        case '%': glyph_index = 4; break;
+        case '^': glyph_index = 5; break;
+        case '&': glyph_index = 6; break;
+        case '*': glyph_index = 7; break;
+        case '(': glyph_index = 8; break;
+        case ')': glyph_index = 9; break;
+        case '_': glyph_index = 10; break;
+        case '+': glyph_index = 11; break;
+        case '=': glyph_index = 12; break;
+        case '[': glyph_index = 13; break;
+        case ']': glyph_index = 14; break;
+        case '{': glyph_index = 15; break;
+        case '}': glyph_index = 16; break;
+        case '\\': glyph_index = 17; break;
+        case '|': glyph_index = 18; break;
+        case ';': glyph_index = 19; break;
+        case ':': glyph_index = 20; break;
+        case '\'': glyph_index = 21; break;
+        case '"': glyph_index = 22; break;
+        case ',': glyph_index = 23; break;
+        case '.': glyph_index = 24; break;
+        case '<': glyph_index = 25; break;
+        case '>': glyph_index = 26; break;
+        case '/': glyph_index = 27; break;
+        case '?': glyph_index = 28; break;
+        case '~': glyph_index = 29; break;
+        case '`': glyph_index = 30; break;
+        default: return 0;
+    }
+    return pgm_read_byte(&oled_large_symbols[glyph_index][row]);
+}
+
+static void oled_draw_glyph(uint8_t x, uint8_t y, char glyph, uint8_t scale) {
+    for (uint8_t row = 0; row < 5; row++) {
+        const uint8_t pixels = oled_large_glyph_row(glyph, row);
+        for (uint8_t column = 0; column < 3; column++) {
+            if (pixels & (1 << (2 - column))) {
+                for (uint8_t pixel_y = 0; pixel_y < scale; pixel_y++) {
+                    for (uint8_t pixel_x = 0; pixel_x < scale; pixel_x++) {
+                        oled_write_pixel(x + column * scale + pixel_x, y + row * scale + pixel_y, true);
+                    }
+                }
+            }
+        }
     }
 }
 
-char keylog_str[24] = {};
+static void oled_draw_large_line(uint8_t line, char first, char second, char third, char fourth) {
+    const uint8_t y = line * 15;
 
-const char code_to_name[60] = {' ', ' ', ' ', ' ', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'R', 'E', 'B', 'T', '_', '-', '=', '[', ']', '\\', '#', ';', '\'', '`', ',', '.', '/', ' ', ' ', ' '};
-
-void set_keylog(uint16_t keycode, keyrecord_t *record) {
-    char name = ' ';
-    if ((keycode >= QK_MOD_TAP && keycode <= QK_MOD_TAP_MAX) || (keycode >= QK_LAYER_TAP && keycode <= QK_LAYER_TAP_MAX)) {
-        keycode = keycode & 0xFF;
-    }
-    if (keycode < 60) {
-        name = code_to_name[keycode];
-    }
-
-    // update keylog
-    snprintf(keylog_str, sizeof(keylog_str), "%dx%d, k%2d : %c", record->event.key.row, record->event.key.col, keycode, name);
+    oled_draw_glyph(0, y, first, 2);
+    oled_draw_glyph(7, y, second, 2);
+    oled_draw_glyph(14, y, third, 2);
+    oled_draw_glyph(21, y, fourth, 2);
 }
 
-void oled_render_keylog(void) {
-    // oled_write(keylog_str, false);
+static void oled_draw_status_icon(uint8_t line, char icon) {
+    oled_draw_glyph(11, line * 15, icon, 3);
+}
+
+static void oled_draw_layer_icon(char icon) {
+    if (icon == OLED_ICON_FUN) {
+        oled_draw_glyph(7, 0, 'F', 3);
+        oled_draw_glyph(17, 0, 'N', 3);
+        return;
+    }
+    oled_draw_glyph(11, 0, icon, 3);
+}
+
+static void oled_render_layer_state(void) {
+    static layer_state_t last_layer_state = (layer_state_t)-1;
+    static uint8_t       last_mods        = 0xFF;
+    static bool          last_caps_word;
+    char          icon = OLED_ICON_BASE;
+    const uint8_t mods = get_mods();
+    const bool    caps_word_active = is_caps_word_on();
+
+    if (layer_state == last_layer_state && mods == last_mods && caps_word_active == last_caps_word) {
+        return;
+    }
+
+    if (layer_state & L_ADJUST) {
+        icon = OLED_ICON_MEDIA;
+    } else {
+        switch (get_highest_layer(layer_state)) {
+            case 1:
+                icon = OLED_ICON_NAV;
+                break;
+            case 2:
+                icon = OLED_ICON_MOUSE;
+                break;
+            case 4:
+                icon = OLED_ICON_NUM;
+                break;
+            case 5:
+                icon = OLED_ICON_SYM;
+                break;
+            case 6:
+                icon = OLED_ICON_FUN;
+                break;
+            case 7:
+                icon = OLED_ICON_BUTTON;
+                break;
+            case 8:
+                icon = OLED_ICON_TAP;
+                break;
+        }
+    }
+
+    oled_clear();
+
+    oled_draw_layer_icon(icon);
+    if (caps_word_active) {
+        oled_draw_status_icon(2, OLED_ICON_CAPS);
+    }
+
+    if (mods & MOD_MASK_CTRL) {
+        oled_draw_status_icon(4, OLED_ICON_CTRL);
+    }
+    if (mods & MOD_MASK_ALT) {
+        oled_draw_status_icon(5, OLED_ICON_ALT);
+    }
+    if (mods & MOD_MASK_GUI) {
+        oled_draw_status_icon(6, OLED_ICON_GUI);
+    }
+    if (mods & MOD_MASK_SHIFT) {
+        oled_draw_status_icon(7, OLED_ICON_SHIFT);
+    }
+
+    last_layer_state = layer_state;
+    last_mods = mods;
+    last_caps_word = caps_word_active;
+}
+
+static uint8_t oled_unpack_mods5(uint8_t mods) {
+    return mods & 0x10 ? mods << 4 : mods;
+}
+
+static uint16_t oled_display_keycode(uint16_t keycode, uint8_t *mods) {
+    if (IS_QK_MOD_TAP(keycode)) {
+        return QK_MOD_TAP_GET_TAP_KEYCODE(keycode);
+    }
+    if (IS_QK_LAYER_TAP(keycode)) {
+        return QK_LAYER_TAP_GET_TAP_KEYCODE(keycode);
+    }
+    if (IS_QK_MODS(keycode)) {
+        *mods |= oled_unpack_mods5(QK_MODS_GET_MODS(keycode));
+        return QK_MODS_GET_BASIC_KEYCODE(keycode);
+    }
+    return keycode;
+}
+
+static char oled_symbol_for_keycode(uint16_t keycode, uint8_t mods) {
+    const bool shifted = mods & MOD_MASK_SHIFT;
+
+    switch (keycode) {
+        case KC_1: return shifted ? '!' : '1';
+        case KC_2: return shifted ? '@' : '2';
+        case KC_3: return shifted ? '#' : '3';
+        case KC_4: return shifted ? '$' : '4';
+        case KC_5: return shifted ? '%' : '5';
+        case KC_6: return shifted ? '^' : '6';
+        case KC_7: return shifted ? '&' : '7';
+        case KC_8: return shifted ? '*' : '8';
+        case KC_9: return shifted ? '(' : '9';
+        case KC_0: return shifted ? ')' : '0';
+        case KC_MINS: return shifted ? '_' : '-';
+        case KC_EQL: return shifted ? '+' : '=';
+        case KC_LBRC: return shifted ? '{' : '[';
+        case KC_RBRC: return shifted ? '}' : ']';
+        case KC_BSLS: return shifted ? '|' : '\\';
+        case KC_SCLN: return shifted ? ':' : ';';
+        case KC_QUOT: return shifted ? '"' : '\'';
+        case KC_GRV: return shifted ? '~' : '`';
+        case KC_COMM: return shifted ? '<' : ',';
+        case KC_DOT: return shifted ? '>' : '.';
+        case KC_SLSH: return shifted ? '?' : '/';
+        case KC_KP_SLASH: return '/';
+        case KC_KP_ASTERISK: return '*';
+        case KC_KP_MINUS: return '-';
+        case KC_KP_PLUS: return '+';
+        case KC_KP_EQUAL: return '=';
+    }
+    return '\0';
+}
+
+static void oled_write_key_label(uint8_t line, oled_key_history_entry_t entry) {
+    uint8_t  mods    = entry.mods;
+    uint16_t keycode = oled_display_keycode(entry.keycode, &mods);
+    const char symbol = oled_symbol_for_keycode(keycode, mods);
+
+    if (keycode == KC_NO) {
+        return;
+    }
+    if (symbol) {
+        oled_draw_large_line(line, symbol, ' ', ' ', ' ');
+        return;
+    }
+
+    if (keycode >= KC_A && keycode <= KC_Z) {
+        oled_draw_large_line(line, 'A' + keycode - KC_A, ' ', ' ', ' ');
+        return;
+    }
+
+    switch (keycode) {
+        case KC_SPC: oled_draw_large_line(line, 'S', 'P', 'C', ' '); break;
+        case KC_ENT: oled_draw_large_line(line, 'E', 'N', 'T', ' '); break;
+        case KC_BSPC: oled_draw_large_line(line, 'B', 'S', 'P', ' '); break;
+        case KC_TAB: oled_draw_large_line(line, 'T', 'A', 'B', ' '); break;
+        case KC_ESC: oled_draw_large_line(line, 'E', 'S', 'C', ' '); break;
+        case KC_LEFT: oled_draw_large_line(line, 'L', 'E', 'F', 'T'); break;
+        case KC_RGHT: oled_draw_large_line(line, 'R', 'G', 'H', 'T'); break;
+        case KC_UP: oled_draw_large_line(line, 'U', 'P', ' ', ' '); break;
+        case KC_DOWN: oled_draw_large_line(line, 'D', 'O', 'W', 'N'); break;
+        case KC_LCTL:
+        case KC_RCTL: oled_draw_large_line(line, 'C', 'T', 'R', 'L'); break;
+        case KC_LALT:
+        case KC_RALT: oled_draw_large_line(line, 'A', 'L', 'T', ' '); break;
+        case KC_LGUI:
+        case KC_RGUI: oled_draw_large_line(line, 'G', 'U', 'I', ' '); break;
+        case KC_LSFT:
+        case KC_RSFT: oled_draw_large_line(line, 'S', 'H', 'F', 'T'); break;
+        case TL_LOWR: oled_draw_large_line(line, 'L', 'O', 'W', 'R'); break;
+        case TL_UPPR: oled_draw_large_line(line, 'U', 'P', 'P', 'R'); break;
+        default: oled_draw_large_line(line, '-', '-', '-', '-'); break;
+    }
+}
+
+static void oled_render_keylog(void) {
+    static oled_key_history_t rendered_history;
+    static bool               rendered;
+
+    if (rendered && memcmp(&rendered_history, &key_history, sizeof(key_history)) == 0) {
+        return;
+    }
+
+    oled_clear();
+    for (uint8_t index = 0; index < OLED_KEY_HISTORY_SIZE; index++) {
+        oled_write_key_label(index, key_history.keys[index]);
+    }
+    memcpy(&rendered_history, &key_history, sizeof(key_history));
+    rendered = true;
+}
+
+static void oled_key_history_sync_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
+    (void)out_buflen;
+    (void)out_data;
+
+    if (in_buflen == sizeof(key_history)) {
+        memcpy(&key_history, in_data, sizeof(key_history));
+    }
+}
+
+void keyboard_post_init_user(void) {
+    transaction_register_rpc(OLED_KEY_HISTORY_SYNC, oled_key_history_sync_handler);
+}
+
+void housekeeping_task_user(void) {
+    static uint32_t last_key_history_sync;
+
+    if (is_keyboard_master() && key_history_needs_sync && timer_elapsed32(last_key_history_sync) >= 10) {
+        if (transaction_rpc_send(OLED_KEY_HISTORY_SYNC, sizeof(key_history), &key_history)) {
+            key_history_needs_sync = false;
+        }
+        last_key_history_sync = timer_read32();
+    }
 }
 
 void render_bootmagic_status(bool status) {
@@ -230,16 +514,20 @@ void oled_render_logo(void) {
 bool oled_task_user(void) {
     if (is_keyboard_master()) {
         oled_render_layer_state();
-        oled_render_keylog();
     } else {
-        oled_render_logo();
+        oled_render_keylog();
     }
     return false;
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    if (record->event.pressed) {
-        set_keylog(keycode, record);
+    if (is_keyboard_master() && record->event.pressed) {
+        for (uint8_t index = OLED_KEY_HISTORY_SIZE - 1; index > 0; index--) {
+            key_history.keys[index] = key_history.keys[index - 1];
+        }
+        key_history.keys[0].keycode = keycode;
+        key_history.keys[0].mods    = get_mods();
+        key_history_needs_sync = true;
     }
     return true;
 }
