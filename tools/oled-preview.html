@@ -18,7 +18,7 @@
         h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.5rem); letter-spacing: -0.08em; }
         .lede { max-width: 68ch; color: #aeb7a9; line-height: 1.55; }
         .layout { display: grid; grid-template-columns: 300px 1fr; gap: 28px; align-items: start; margin-top: 28px; }
-        .panel, .display-card { border: 1px solid #3f4a3e; background: #181d18; border-radius: 12px; }
+        .panel, .display-card, .editor { border: 1px solid #3f4a3e; background: #181d18; border-radius: 12px; }
         .panel { padding: 18px; }
         .panel h2, .display-card h2 { margin: 0 0 14px; font-size: .75rem; letter-spacing: .12em; color: #b8d980; text-transform: uppercase; }
         label { display: grid; gap: 7px; margin: 0 0 14px; color: #c4ccc0; font-size: .82rem; }
@@ -35,13 +35,24 @@
         .history span { color: #8f998b; }
         .displays { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
         .display-card { min-width: 0; padding: 16px; }
-        .oled-shell { display: grid; place-items: center; min-height: 530px; border-radius: 8px; background: linear-gradient(135deg, #080a08, #252b24); box-shadow: inset 0 0 0 10px #070907, inset 0 0 28px #000; }
-        canvas { width: 192px; height: 512px; image-rendering: pixelated; background: #b8d995; box-shadow: 0 0 28px #b8d99533; }
+        .editor { margin-top: 28px; padding: 18px; }
+        .editor h2 { margin: 0 0 8px; font-size: .75rem; letter-spacing: .12em; color: #b8d980; text-transform: uppercase; }
+        .editor p { max-width: 68ch; margin: 0 0 16px; color: #aeb7a9; font-size: .82rem; line-height: 1.5; }
+        .editor-layout { display: grid; grid-template-columns: minmax(240px, 330px) minmax(0, 1fr); gap: 24px; align-items: start; }
+        .pixel-grid { display: grid; grid-template-columns: repeat(var(--columns), 1fr); grid-template-rows: repeat(var(--rows), 1fr); width: min(100%, 330px); aspect-ratio: var(--columns) / var(--rows); border: 1px solid #4d594a; background: #101310; }
+        .pixel { min-width: 0; padding: 0; border: 1px solid #283026; border-radius: 0; background: #b8d995; }
+        .pixel[data-on="true"] { background: #162413; }
+        .editor-output { display: grid; gap: 12px; }
+        textarea { width: 100%; min-height: 148px; resize: vertical; color: #e8eee4; background: #101310; border: 1px solid #4d594a; border-radius: 6px; padding: 10px; line-height: 1.45; }
+        .editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .secondary { color: #d8e2d2; background: #354132; }
+        .oled-shell { display: grid; place-items: center; min-height: 650px; border-radius: 8px; background: linear-gradient(135deg, #080a08, #252b24); box-shadow: inset 0 0 0 10px #070907, inset 0 0 28px #000; }
+        canvas { width: 160px; height: 640px; image-rendering: pixelated; background: #b8d995; box-shadow: 0 0 28px #b8d99533; }
         #status { margin: 20px 0 0; color: #b8d980; font-size: .8rem; }
         #status.error { color: #ffb4a9; }
         code { color: #d9f9a0; }
-        @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
-        @media (max-width: 550px) { body { padding: 16px; } .displays { gap: 12px; } .oled-shell { min-height: 350px; } canvas { width: 120px; height: 320px; } }
+        @media (max-width: 800px) { .layout, .editor-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 550px) { body { padding: 16px; } .displays { gap: 12px; } .oled-shell { min-height: 430px; } canvas { width: 100px; height: 400px; } }
     </style>
 </head>
 <body>
@@ -102,8 +113,32 @@
                 </article>
             </section>
         </div>
+        <section class="editor" aria-labelledby="editor-title">
+            <h2 id="editor-title">Icon pixel editor</h2>
+            <p>Edit any icon at its firmware-defined dimensions. Each square is a physical OLED pixel; the generated initializer can replace the matching row in <code>oled_large_icons</code>.</p>
+            <div class="editor-layout">
+                <div>
+                    <label>Icon
+                        <select id="editor-icon"></select>
+                    </label>
+                    <div id="pixel-grid" class="pixel-grid" role="grid" aria-label="Editable OLED icon pixels"></div>
+                </div>
+                <div class="editor-output">
+                    <label>C initializer
+                        <textarea id="editor-code" readonly spellcheck="false" aria-label="C initializer ready to copy"></textarea>
+                    </label>
+                    <div class="editor-actions">
+                        <button id="copy-icon" type="button">Copy C code</button>
+                        <button id="save-icon" type="button">Save to source</button>
+                        <button id="clear-icon" class="secondary" type="button">Clear</button>
+                        <button id="invert-icon" class="secondary" type="button">Invert</button>
+                        <button id="reset-icon" class="secondary" type="button">Reset icon</button>
+                    </div>
+                </div>
+            </div>
+        </section>
         <p id="status" role="status">Loading visual source...</p>
-        <p>Serve the repository: <code>python3 -m http.server</code>, then open <code>http://localhost:8000/tools/oled-preview.html</code>.</p>
+        <p>For source saving, run <code>python3 tools/oled-preview-server.py</code>, then open <code>http://localhost:8000/tools/oled-preview.html</code>.</p>
     </main>
     <script>
         const WIDTH = 32;
@@ -112,6 +147,9 @@
         const fontPath = document.querySelector("#font-path");
         const status = document.querySelector("#status");
         const controls = document.querySelectorAll("input, select");
+        const editorIcon = document.querySelector("#editor-icon");
+        const pixelGrid = document.querySelector("#pixel-grid");
+        const editorCode = document.querySelector("#editor-code");
         let visual;
 
         function extractArray(source, name) {
@@ -147,10 +185,16 @@
                 textFontHeight: extractDefine(source, "OLED_TEXT_FONT_HEIGHT"),
                 historyTextScale: extractDefine(source, "OLED_HISTORY_TEXT_SCALE"),
                 historyLineHeight: extractDefine(source, "OLED_HISTORY_LINE_HEIGHT"),
+                historyTopPadding: extractDefine(source, "OLED_HISTORY_TOP_PADDING"),
                 historyGlyphSpacing: extractDefine(source, "OLED_HISTORY_GLYPH_SPACING"),
                 historyTextX: extractDefine(source, "OLED_HISTORY_TEXT_X"),
-                statusLineHeight: extractDefine(source, "OLED_STATUS_LINE_HEIGHT"),
-                statusIconX: extractDefine(source, "OLED_STATUS_ICON_X"),
+                statusCenterX: extractDefine(source, "OLED_STATUS_CENTER_X"),
+                statusLeftX: extractDefine(source, "OLED_STATUS_LEFT_X"),
+                statusRightX: extractDefine(source, "OLED_STATUS_RIGHT_X"),
+                statusLayerY: extractDefine(source, "OLED_STATUS_LAYER_Y"),
+                statusCapsY: extractDefine(source, "OLED_STATUS_CAPS_Y"),
+                statusTopModsY: extractDefine(source, "OLED_STATUS_TOP_MODS_Y"),
+                statusBottomModsY: extractDefine(source, "OLED_STATUS_BOTTOM_MODS_Y"),
             };
         }
 
@@ -195,11 +239,12 @@
         }
 
         function drawLine(buffer, line, value) {
-            [...value.toUpperCase().padEnd(3).slice(0, 3)].forEach((char, index) => drawTextGlyph(buffer, visual.historyTextX + index * visual.historyGlyphSpacing, line * visual.historyLineHeight, char, visual.historyTextScale));
+            const y = visual.historyTopPadding + line * visual.historyLineHeight;
+            [...value.toUpperCase().padEnd(3).slice(0, 3)].forEach((char, index) => drawTextGlyph(buffer, visual.historyTextX + index * visual.historyGlyphSpacing, y, char, visual.historyTextScale));
         }
 
-        function drawStatusIcon(buffer, line, icon) {
-            drawIcon(buffer, visual.statusIconX, line * visual.statusLineHeight, String.fromCharCode(icon));
+        function drawStatusIcon(buffer, x, y, icon) {
+            drawIcon(buffer, x, y, String.fromCharCode(icon));
         }
 
         function renderStatus() {
@@ -209,19 +254,20 @@
                 drawTextGlyph(buffer, 4, 1, "F", 2);
                 drawTextGlyph(buffer, 16, 1, "N", 2);
             } else {
-                drawStatusIcon(buffer, 0, icon);
+                drawStatusIcon(buffer, visual.statusCenterX, visual.statusLayerY, icon);
             }
-            if (document.querySelector("#caps").checked) drawStatusIcon(buffer, 2, visual.iconsByName.CAPS);
-            if (document.querySelector("#ctrl").checked) drawStatusIcon(buffer, 4, visual.iconsByName.CTRL);
-            if (document.querySelector("#alt").checked) drawStatusIcon(buffer, 5, visual.iconsByName.ALT);
-            if (document.querySelector("#gui").checked) drawStatusIcon(buffer, 6, visual.iconsByName.GUI);
-            if (document.querySelector("#shift").checked) drawStatusIcon(buffer, 7, visual.iconsByName.SHIFT);
+            if (document.querySelector("#caps").checked) drawStatusIcon(buffer, visual.statusCenterX, visual.statusCapsY, visual.iconsByName.CAPS);
+            if (document.querySelector("#ctrl").checked) drawStatusIcon(buffer, visual.statusLeftX, visual.statusTopModsY, visual.iconsByName.CTRL);
+            if (document.querySelector("#alt").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusTopModsY, visual.iconsByName.ALT);
+            if (document.querySelector("#gui").checked) drawStatusIcon(buffer, visual.statusLeftX, visual.statusBottomModsY, visual.iconsByName.GUI);
+            if (document.querySelector("#shift").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusBottomModsY, visual.iconsByName.SHIFT);
             return buffer;
         }
 
         function renderHistory() {
             const buffer = framebuffer();
-            document.querySelectorAll(".history-key").forEach((input, line) => drawLine(buffer, line, input.value));
+            const history = document.querySelectorAll(".history-key");
+            history.forEach((input, index) => drawLine(buffer, history.length - 1 - index, input.value));
             return buffer;
         }
 
@@ -247,6 +293,83 @@
             drawCanvas(document.querySelector("#right"), renderHistory());
         }
 
+        function editorIconIndex() {
+            return Object.keys(visual.iconsByName).indexOf(editorIcon.value);
+        }
+
+        function iconCode(icon) {
+            const digits = Math.ceil(visual.iconWidth / 4);
+            return `    {${icon.map((row) => `0x${row.toString(16).toUpperCase().padStart(digits, "0")}`).join(", ")}},`;
+        }
+
+        function renderEditor() {
+            if (!visual) return;
+            const icon = visual.icons[editorIconIndex()];
+            pixelGrid.style.setProperty("--columns", visual.iconWidth);
+            pixelGrid.style.setProperty("--rows", visual.iconHeight);
+            pixelGrid.replaceChildren(...icon.flatMap((row, rowIndex) => Array.from({ length: visual.iconWidth }, (_, column) => {
+                const pixel = document.createElement("button");
+                const on = Boolean(row & (1 << (visual.iconWidth - 1 - column)));
+                pixel.type = "button";
+                pixel.className = "pixel";
+                pixel.dataset.on = on;
+                pixel.setAttribute("role", "gridcell");
+                pixel.setAttribute("aria-label", `Row ${rowIndex + 1}, column ${column + 1}: ${on ? "on" : "off"}`);
+                pixel.addEventListener("click", () => {
+                    visual.icons[editorIconIndex()][rowIndex] ^= 1 << (visual.iconWidth - 1 - column);
+                    renderEditor();
+                    render();
+                });
+                return pixel;
+            })));
+            editorCode.value = iconCode(icon);
+        }
+
+        function populateEditor() {
+            editorIcon.replaceChildren(...Object.keys(visual.iconsByName).map((name) => new Option(name, name)));
+            editorIcon.value = "BASE";
+            renderEditor();
+        }
+
+        function resetEditorIcon() {
+            const index = editorIconIndex();
+            visual.icons[index] = [...visual.sourceIcons[index]];
+            renderEditor();
+            render();
+        }
+
+        async function copyEditorCode() {
+            try {
+                await navigator.clipboard.writeText(editorCode.value);
+                status.textContent = `${editorIcon.value} initializer copied.`;
+            } catch {
+                editorCode.focus();
+                editorCode.select();
+                status.textContent = "Select the highlighted initializer and copy it manually.";
+            }
+        }
+
+        async function saveEditorIcon() {
+            try {
+                const response = await fetch("/save-icon", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ icon: editorIcon.value, rows: visual.icons[editorIconIndex()] }),
+                });
+                const contentType = response.headers.get("Content-Type") || "";
+                if (!contentType.includes("application/json")) {
+                    throw new Error("The preview is being served by a static server, not oled-preview-server.py");
+                }
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                visual.sourceIcons[editorIconIndex()] = [...visual.icons[editorIconIndex()]];
+                status.textContent = `${editorIcon.value} saved to ${result.path}.`;
+            } catch (error) {
+                status.classList.add("error");
+                status.textContent = `Could not save icon: ${error.message}. Run tools/oled-preview-server.py.`;
+            }
+        }
+
         async function reload() {
             status.classList.remove("error");
             status.textContent = "Loading visual source...";
@@ -257,6 +380,8 @@
                 if (!fontSource.ok) throw new Error(`${fontSource.status} ${fontSource.statusText}`);
                 visual = parseVisualSource(visualSource);
                 visual.font = extractQmkFont(await fontSource.text());
+                visual.sourceIcons = visual.icons.map((icon) => [...icon]);
+                populateEditor();
                 render();
                 status.textContent = `Loaded glyphs and layout from ${sourcePath.value}.`;
             } catch (error) {
@@ -267,6 +392,20 @@
 
         document.querySelector("#reload").addEventListener("click", reload);
         controls.forEach((control) => control.addEventListener("input", render));
+        editorIcon.addEventListener("input", renderEditor);
+        document.querySelector("#clear-icon").addEventListener("click", () => {
+            visual.icons[editorIconIndex()].fill(0);
+            renderEditor();
+            render();
+        });
+        document.querySelector("#invert-icon").addEventListener("click", () => {
+            visual.icons[editorIconIndex()] = visual.icons[editorIconIndex()].map((row) => row ^ ((1 << visual.iconWidth) - 1));
+            renderEditor();
+            render();
+        });
+        document.querySelector("#reset-icon").addEventListener("click", resetEditorIcon);
+        document.querySelector("#copy-icon").addEventListener("click", copyEditorCode);
+        document.querySelector("#save-icon").addEventListener("click", saveEditorIcon);
         sourcePath.addEventListener("keydown", (event) => { if (event.key === "Enter") reload(); });
         reload();
     </script>

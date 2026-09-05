@@ -208,20 +208,20 @@ static void oled_render_layer_state(void) {
 
     oled_draw_layer_icon(icon);
     if (caps_word_active) {
-        oled_draw_status_icon(2, OLED_ICON_CAPS);
+        oled_draw_status_icon(OLED_STATUS_CENTER_X, OLED_STATUS_CAPS_Y, OLED_ICON_CAPS);
     }
 
     if (mods & MOD_MASK_CTRL) {
-        oled_draw_status_icon(4, OLED_ICON_CTRL);
+        oled_draw_status_icon(OLED_STATUS_LEFT_X, OLED_STATUS_TOP_MODS_Y, OLED_ICON_CTRL);
     }
     if (mods & MOD_MASK_ALT) {
-        oled_draw_status_icon(5, OLED_ICON_ALT);
+        oled_draw_status_icon(OLED_STATUS_RIGHT_X, OLED_STATUS_TOP_MODS_Y, OLED_ICON_ALT);
     }
     if (mods & MOD_MASK_GUI) {
-        oled_draw_status_icon(6, OLED_ICON_GUI);
+        oled_draw_status_icon(OLED_STATUS_LEFT_X, OLED_STATUS_BOTTOM_MODS_Y, OLED_ICON_GUI);
     }
     if (mods & MOD_MASK_SHIFT) {
-        oled_draw_status_icon(7, OLED_ICON_SHIFT);
+        oled_draw_status_icon(OLED_STATUS_RIGHT_X, OLED_STATUS_BOTTOM_MODS_Y, OLED_ICON_SHIFT);
     }
 
     last_layer_state = layer_state;
@@ -333,7 +333,7 @@ static void oled_render_keylog(void) {
 
     oled_clear();
     for (uint8_t index = 0; index < OLED_KEY_HISTORY_SIZE; index++) {
-        oled_write_key_label(index, key_history.keys[index]);
+        oled_write_key_label(OLED_KEY_HISTORY_SIZE - 1 - index, key_history.keys[index]);
     }
     memcpy(&rendered_history, &key_history, sizeof(key_history));
     rendered = true;
