@@ -58,14 +58,14 @@
 <body>
     <main>
         <h1>Corne OLED Preview</h1>
-        <p class="lede">A visual simulator for the two portrait OLEDs. It loads the icon layout from <code>oled_visuals.h</code> and the 5x7 text font from the same QMK source compiled by the firmware.</p>
+        <p class="lede">A visual simulator for the two portrait OLEDs. It loads the icon layout from <code>oled_visuals.h</code> and the native Spleen 8x16 bitmap font used by the key history.</p>
         <div class="layout">
             <aside class="panel">
                 <label>Visual source
                     <input id="source-path" type="text" value="../keyboards/crkbd/keymaps/vial/oled_visuals.h">
                 </label>
-                <label>Text font source
-                    <input id="font-path" type="text" value="../keyboards/crkbd/lib/glcdfont.c">
+                <label>History font source
+                    <input id="font-path" type="text" value="../keyboards/crkbd/keymaps/vial/fonts/spleen-8x16.bdf">
                 </label>
                 <button id="reload" type="button">Reload visual source</button>
                 <fieldset>
@@ -168,10 +168,16 @@
             return Object.fromEntries([...source.matchAll(/#define\s+OLED_ICON_(\w+)\s+'\\x([\da-f]{2})'/gi)].map(([, name, hex]) => [name, Number.parseInt(hex, 16)]));
         }
 
-        function extractQmkFont(source) {
-            const match = source.match(/const unsigned char font\[\] PROGMEM\s*=\s*\{([\s\S]*?)\n\};/);
-            if (!match) throw new Error("Could not find the QMK font array.");
-            return [...match[1].matchAll(/0x[\da-f]{1,2}/gi)].map(([value]) => Number.parseInt(value, 16));
+        function extractBdfFont(source) {
+            const font = {};
+
+            for (const block of source.split("STARTCHAR ").slice(1)) {
+                const encoding = block.match(/^ENCODING\s+(\d+)/m);
+                const bitmap = block.match(/^BITMAP\n((?:[\dA-F]{2}\n){16})/m);
+                if (encoding && bitmap) font[Number(encoding[1])] = bitmap[1].trim().split("\n").map((value) => Number.parseInt(value, 16));
+            }
+            if (!font[32] || !font[126]) throw new Error("Could not parse the Spleen BDF font.");
+            return font;
         }
 
         function parseVisualSource(source) {
@@ -180,10 +186,9 @@
                 iconsByName: extractIconCodes(source),
                 iconWidth: extractDefine(source, "OLED_ICON_WIDTH"),
                 iconHeight: extractDefine(source, "OLED_ICON_HEIGHT"),
-                textFontStart: extractDefine(source, "OLED_TEXT_FONT_START"),
-                textFontWidth: extractDefine(source, "OLED_TEXT_FONT_WIDTH"),
-                textFontHeight: extractDefine(source, "OLED_TEXT_FONT_HEIGHT"),
-                historyTextScale: extractDefine(source, "OLED_HISTORY_TEXT_SCALE"),
+                historyFontStart: extractDefine(source, "OLED_HISTORY_FONT_START"),
+                historyFontWidth: extractDefine(source, "OLED_HISTORY_FONT_WIDTH"),
+                historyFontHeight: extractDefine(source, "OLED_HISTORY_FONT_HEIGHT"),
                 historyLineHeight: extractDefine(source, "OLED_HISTORY_LINE_HEIGHT"),
                 historyTopPadding: extractDefine(source, "OLED_HISTORY_TOP_PADDING"),
                 historyGlyphSpacing: extractDefine(source, "OLED_HISTORY_GLYPH_SPACING"),
@@ -220,27 +225,24 @@
             }
         }
 
-        function drawTextGlyph(buffer, x, y, char, scale = 1) {
+        function drawHistoryGlyph(buffer, x, y, char) {
             const code = char.charCodeAt(0);
             if (code < 32 || code > 126) return;
-            for (let column = 0; column < visual.textFontWidth; column++) {
-                const pixels = visual.font[(code - visual.textFontStart) * visual.textFontWidth + column];
-                for (let row = 0; row < visual.textFontHeight; row++) {
-                    if (!(pixels & (1 << row))) continue;
-                    for (let pixelY = 0; pixelY < scale; pixelY++) {
-                        for (let pixelX = 0; pixelX < scale; pixelX++) {
-                            const targetX = x + column * scale + pixelX;
-                            const targetY = y + row * scale + pixelY;
-                            if (targetX < WIDTH && targetY < HEIGHT) buffer[targetY][targetX] = true;
-                        }
-                    }
+            const glyph = visual.font[code];
+            if (!glyph) return;
+            for (let row = 0; row < visual.historyFontHeight; row++) {
+                for (let column = 0; column < visual.historyFontWidth; column++) {
+                    if (!(glyph[row] & (1 << (visual.historyFontWidth - 1 - column)))) continue;
+                    const targetX = x + column;
+                    const targetY = y + row;
+                    if (targetX < WIDTH && targetY < HEIGHT) buffer[targetY][targetX] = true;
                 }
             }
         }
 
         function drawLine(buffer, line, value) {
             const y = visual.historyTopPadding + line * visual.historyLineHeight;
-            [...value.toUpperCase().padEnd(3).slice(0, 3)].forEach((char, index) => drawTextGlyph(buffer, visual.historyTextX + index * visual.historyGlyphSpacing, y, char, visual.historyTextScale));
+            [...value.toUpperCase().padEnd(3).slice(0, 3)].forEach((char, index) => drawHistoryGlyph(buffer, visual.historyTextX + index * visual.historyGlyphSpacing, y, char));
         }
 
         function drawStatusIcon(buffer, x, y, icon) {
@@ -374,7 +376,7 @@
                 const [visualSource, fontSource] = await Promise.all([response.text(), fetch(`${fontPath.value}?t=${Date.now()}`)]);
                 if (!fontSource.ok) throw new Error(`${fontSource.status} ${fontSource.statusText}`);
                 visual = parseVisualSource(visualSource);
-                visual.font = extractQmkFont(await fontSource.text());
+                visual.font = extractBdfFont(await fontSource.text());
                 visual.sourceIcons = visual.icons.map((icon) => [...icon]);
                 populateEditor();
                 render();

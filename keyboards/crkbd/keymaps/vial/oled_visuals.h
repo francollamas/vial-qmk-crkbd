@@ -34,13 +34,12 @@
 
 #define OLED_ICON_WIDTH              15
 #define OLED_ICON_HEIGHT             21
-#define OLED_TEXT_FONT_START         0
-#define OLED_TEXT_FONT_WIDTH         6
-#define OLED_TEXT_FONT_HEIGHT        8
-#define OLED_HISTORY_TEXT_SCALE      2
+#define OLED_HISTORY_FONT_START      32
+#define OLED_HISTORY_FONT_WIDTH      8
+#define OLED_HISTORY_FONT_HEIGHT     16
 #define OLED_HISTORY_TOP_PADDING     8
 #define OLED_HISTORY_LINE_HEIGHT     22
-#define OLED_HISTORY_GLYPH_SPACING   11
+#define OLED_HISTORY_GLYPH_SPACING   12
 #define OLED_HISTORY_TEXT_X          0
 #define OLED_STATUS_CENTER_X         8
 #define OLED_STATUS_LEFT_X           0
@@ -50,7 +49,7 @@
 #define OLED_STATUS_TOP_MODS_Y       84
 #define OLED_STATUS_BOTTOM_MODS_Y    105
 
-extern const unsigned char font[] PROGMEM;
+#include "fonts/spleen-8x16.h"
 
 static const uint16_t PROGMEM oled_large_icons[][OLED_ICON_HEIGHT] = {
     {0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000},
@@ -87,21 +86,18 @@ static void oled_draw_icon(uint8_t x, uint8_t y, char icon) {
     }
 }
 
-static void oled_draw_text_glyph(uint8_t x, uint8_t y, char glyph, uint8_t scale) {
+static void oled_draw_history_glyph(uint8_t x, uint8_t y, char glyph) {
     const uint8_t cast_glyph = (uint8_t)glyph;
 
     if (cast_glyph < 32 || cast_glyph > 126) {
         return;
     }
-    for (uint8_t column = 0; column < OLED_TEXT_FONT_WIDTH; column++) {
-        const uint8_t pixels = pgm_read_byte(&font[(cast_glyph - OLED_TEXT_FONT_START) * OLED_TEXT_FONT_WIDTH + column]);
-        for (uint8_t row = 0; row < OLED_TEXT_FONT_HEIGHT; row++) {
-            if (pixels & (1 << row)) {
-                for (uint8_t pixel_y = 0; pixel_y < scale; pixel_y++) {
-                    for (uint8_t pixel_x = 0; pixel_x < scale; pixel_x++) {
-                        oled_write_pixel(x + column * scale + pixel_x, y + row * scale + pixel_y, true);
-                    }
-                }
+    for (uint8_t row = 0; row < OLED_HISTORY_FONT_HEIGHT; row++) {
+        const uint8_t pixels = pgm_read_byte(&oled_history_font[cast_glyph - OLED_HISTORY_FONT_START][row]);
+
+        for (uint8_t column = 0; column < OLED_HISTORY_FONT_WIDTH; column++) {
+            if (pixels & ((uint8_t)1 << (OLED_HISTORY_FONT_WIDTH - 1 - column))) {
+                oled_write_pixel(x + column, y + row, true);
             }
         }
     }
@@ -110,9 +106,9 @@ static void oled_draw_text_glyph(uint8_t x, uint8_t y, char glyph, uint8_t scale
 static void oled_draw_history_line(uint8_t line, char first, char second, char third) {
     const uint8_t y = OLED_HISTORY_TOP_PADDING + line * OLED_HISTORY_LINE_HEIGHT;
 
-    oled_draw_text_glyph(OLED_HISTORY_TEXT_X, y, first, OLED_HISTORY_TEXT_SCALE);
-    oled_draw_text_glyph(OLED_HISTORY_TEXT_X + OLED_HISTORY_GLYPH_SPACING, y, second, OLED_HISTORY_TEXT_SCALE);
-    oled_draw_text_glyph(OLED_HISTORY_TEXT_X + OLED_HISTORY_GLYPH_SPACING * 2, y, third, OLED_HISTORY_TEXT_SCALE);
+    oled_draw_history_glyph(OLED_HISTORY_TEXT_X, y, first);
+    oled_draw_history_glyph(OLED_HISTORY_TEXT_X + OLED_HISTORY_GLYPH_SPACING, y, second);
+    oled_draw_history_glyph(OLED_HISTORY_TEXT_X + OLED_HISTORY_GLYPH_SPACING * 2, y, third);
 }
 
 static void oled_draw_status_icon(uint8_t x, uint8_t y, char icon) {

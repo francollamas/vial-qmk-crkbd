@@ -2,6 +2,43 @@
 
 This document provides guidelines and instructions for agentic coding agents working on this QMK firmware repository for the Corne (CRKBD) keyboard with Vial support.
 
+## Current Customization Context
+
+This repository is actively customized for a split Corne keyboard. Work may change both keyboard behavior and the two 32x128 OLED displays. Preserve existing Vial compatibility and avoid unrelated QMK-core changes.
+
+### Primary Files
+
+| Area | Files | Purpose |
+|---|---|---|
+| Key behavior | `keyboards/crkbd/keymaps/vial/keymap.c` | Layers, key handling, split synchronization, and OLED state selection. |
+| OLED renderer | `keyboards/crkbd/keymaps/vial/oled_visuals.h` | Shared icon bitmaps, positions, and native history font rendering. |
+| Keymap settings | `keyboards/crkbd/keymaps/vial/config.h`, `rules.mk`, `vial.json` | Vial, OLED, split, and build configuration. |
+| Visual preview | `tools/oled-preview.html` | Browser simulator that parses the same OLED definitions used by firmware. |
+| Preview saving | `tools/oled-preview-server.py` | Localhost-only server that saves pixel-editor icon rows to `oled_visuals.h`. |
+
+### OLED Design Rules
+
+- Both OLEDs are `32x128` monochrome displays and use `OLED_ROTATION_270`.
+- Keep firmware and `tools/oled-preview.html` synchronized whenever icon geometry, layout, or font rendering changes.
+- The left OLED is status-oriented: layer icon, a full-height blank block, right-aligned Caps Word, a full-height blank block, Ctrl/Alt, then Gui/Shift. Icons are editable `15x21` bitmaps.
+- The right OLED is key history: newest key is at the bottom, with `8` pixels of top padding. It uses the keymap-local native history font in `oled_visuals.h`; do not modify shared `glcdfont.c` for this feature.
+- Store custom pixel data in `PROGMEM` and read it with `pgm_read_*` helpers.
+
+### Preview Workflow
+
+1. Run `python3 tools/oled-preview-server.py` from the repository root.
+2. Open `http://localhost:8000/tools/oled-preview.html`.
+3. Use the pixel editor to modify an icon and select `Save to source` to update `oled_visuals.h`.
+4. Reload the preview after firmware-source changes.
+
+The save endpoint is intentionally bound to `127.0.0.1` and only writes the OLED icon table. Do not replace it with a generic file-write endpoint.
+
+### Verification
+
+- Run `git diff --check` after edits.
+- Validate preview JavaScript syntax after changing `tools/oled-preview.html`.
+- Do not run firmware builds in environments without `avr-gcc`; the user compiles and flashes locally.
+
 ## Build Commands
 
 ### Building the Keyboard
