@@ -150,6 +150,9 @@
         const editorIcon = document.querySelector("#editor-icon");
         const pixelGrid = document.querySelector("#pixel-grid");
         const editorCode = document.querySelector("#editor-code");
+        let historyLastInput = Date.now();
+        let historyLife;
+        let historyLifeLastFrame;
         let visual;
 
         function extractArray(source, name) {
@@ -193,6 +196,10 @@
                 historyTopPadding: extractDefine(source, "OLED_HISTORY_TOP_PADDING"),
                 historyGlyphSpacing: extractDefine(source, "OLED_HISTORY_GLYPH_SPACING"),
                 historyTextX: extractDefine(source, "OLED_HISTORY_TEXT_X"),
+                historyIdleTimeout: extractDefine(source, "OLED_HISTORY_IDLE_TIMEOUT"),
+                historyLifeInterval: extractDefine(source, "OLED_HISTORY_LIFE_INTERVAL"),
+                historyPixelWidth: extractDefine(source, "OLED_HISTORY_PIXEL_WIDTH"),
+                historyPixelHeight: extractDefine(source, "OLED_HISTORY_PIXEL_HEIGHT"),
                 statusCenterX: extractDefine(source, "OLED_STATUS_CENTER_X"),
                 statusLeftX: extractDefine(source, "OLED_STATUS_LEFT_X"),
                 statusRightX: extractDefine(source, "OLED_STATUS_RIGHT_X"),
@@ -261,11 +268,39 @@
             return buffer;
         }
 
-        function renderHistory() {
+        function renderKeyHistory() {
             const buffer = framebuffer();
             const history = document.querySelectorAll(".history-key");
             history.forEach((input, index) => drawLine(buffer, history.length - 1 - index, input.value));
             return buffer;
+        }
+
+        function advanceHistoryLife() {
+            const now = Date.now();
+            if (!historyLife) {
+                if (now - historyLastInput < visual.historyIdleTimeout) return false;
+                historyLife = renderKeyHistory();
+                historyLifeLastFrame = now;
+                return true;
+            }
+            if (now - historyLifeLastFrame < visual.historyLifeInterval) return false;
+
+            historyLife = historyLife.map((row, y) => row.map((alive, x) => {
+                let neighbors = 0;
+                for (let yOffset = -1; yOffset <= 1; yOffset++) {
+                    for (let xOffset = -1; xOffset <= 1; xOffset++) {
+                        if (xOffset || yOffset) neighbors += historyLife[(y + yOffset + visual.historyPixelHeight) % visual.historyPixelHeight][(x + xOffset + visual.historyPixelWidth) % visual.historyPixelWidth];
+                    }
+                }
+                return neighbors === 3 || (alive && neighbors === 2);
+            }));
+            historyLifeLastFrame = now;
+            return true;
+        }
+
+        function renderHistory() {
+            advanceHistoryLife();
+            return historyLife || renderKeyHistory();
         }
 
         function drawCanvas(canvas, buffer) {
@@ -378,6 +413,8 @@
                 visual = parseVisualSource(visualSource);
                 visual.font = extractBdfFont(await fontSource.text());
                 visual.sourceIcons = visual.icons.map((icon) => [...icon]);
+                historyLife = undefined;
+                historyLastInput = Date.now();
                 populateEditor();
                 render();
                 status.textContent = `Loaded glyphs and layout from ${sourcePath.value}.`;
@@ -388,7 +425,13 @@
         }
 
         document.querySelector("#reload").addEventListener("click", reload);
-        controls.forEach((control) => control.addEventListener("input", render));
+        controls.forEach((control) => control.addEventListener("input", () => {
+            if (control.classList.contains("history-key")) {
+                historyLife = undefined;
+                historyLastInput = Date.now();
+            }
+            render();
+        }));
         editorIcon.addEventListener("input", renderEditor);
         document.querySelector("#clear-icon").addEventListener("click", () => {
             visual.icons[editorIconIndex()].fill(0);
@@ -404,6 +447,9 @@
         document.querySelector("#copy-icon").addEventListener("click", copyEditorCode);
         document.querySelector("#save-icon").addEventListener("click", saveEditorIcon);
         sourcePath.addEventListener("keydown", (event) => { if (event.key === "Enter") reload(); });
+        setInterval(() => {
+            if (visual && advanceHistoryLife()) render();
+        }, 50);
         reload();
     </script>
 </body>

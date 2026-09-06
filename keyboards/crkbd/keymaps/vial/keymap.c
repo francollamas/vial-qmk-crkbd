@@ -162,6 +162,12 @@ typedef struct {
 
 static oled_key_history_t key_history;
 static bool               key_history_needs_sync;
+static oled_key_history_t rendered_history;
+static bool               key_history_rendered;
+static uint32_t           last_key_history_update;
+static uint32_t           oled_life_last_frame;
+static bool               oled_life_active;
+static uint8_t            oled_life_current[OLED_MATRIX_SIZE];
 
 
 static void oled_render_layer_state(void) {
@@ -323,20 +329,72 @@ static void oled_write_key_label(uint8_t line, oled_key_history_entry_t entry) {
     }
 }
 
-static void oled_render_keylog(void) {
-    static oled_key_history_t rendered_history;
-    static bool               rendered;
+static bool oled_life_cell_is_alive(const uint8_t *cells, uint8_t x, uint8_t y) {
+    return cells[x + (y / 8) * OLED_HISTORY_PIXEL_WIDTH] & ((uint8_t)1 << (y % 8));
+}
 
-    if (rendered && memcmp(&rendered_history, &key_history, sizeof(key_history)) == 0) {
+static void oled_life_seed(void) {
+    const oled_buffer_reader_t display = oled_read_raw(0);
+
+    memcpy(oled_life_current, display.current_element, OLED_MATRIX_SIZE);
+}
+
+static void oled_life_step(void) {
+    for (uint8_t page = 0; page < OLED_HISTORY_PIXEL_HEIGHT / 8; page++) {
+        for (uint8_t x = 0; x < OLED_HISTORY_PIXEL_WIDTH; x++) {
+            uint8_t next = 0;
+
+            for (uint8_t bit = 0; bit < 8; bit++) {
+                const uint8_t y = page * 8 + bit;
+                uint8_t       neighbors = 0;
+
+                for (int8_t y_offset = -1; y_offset <= 1; y_offset++) {
+                    for (int8_t x_offset = -1; x_offset <= 1; x_offset++) {
+                        if (x_offset == 0 && y_offset == 0) {
+                            continue;
+                        }
+                        neighbors += oled_life_cell_is_alive(oled_life_current, (x + x_offset + OLED_HISTORY_PIXEL_WIDTH) % OLED_HISTORY_PIXEL_WIDTH, (y + y_offset + OLED_HISTORY_PIXEL_HEIGHT) % OLED_HISTORY_PIXEL_HEIGHT);
+                    }
+                }
+
+                const uint16_t index = x + page * OLED_HISTORY_PIXEL_WIDTH;
+                const uint8_t mask = (uint8_t)1 << bit;
+                const bool    alive = oled_life_current[index] & mask;
+
+                if (neighbors == 3 || (alive && neighbors == 2)) {
+                    next |= mask;
+                }
+            }
+
+            oled_write_raw_byte(next, x + page * OLED_HISTORY_PIXEL_WIDTH);
+        }
+    }
+    memcpy(oled_life_current, oled_read_raw(0).current_element, OLED_MATRIX_SIZE);
+}
+
+static void oled_render_keylog(void) {
+    if (oled_life_active) {
+        if (timer_elapsed32(oled_life_last_frame) >= OLED_HISTORY_LIFE_INTERVAL) {
+            oled_life_step();
+            oled_life_last_frame = timer_read32();
+        }
         return;
     }
 
-    oled_clear();
-    for (uint8_t index = 0; index < OLED_KEY_HISTORY_SIZE; index++) {
-        oled_write_key_label(OLED_KEY_HISTORY_SIZE - 1 - index, key_history.keys[index]);
+    if (!key_history_rendered || memcmp(&rendered_history, &key_history, sizeof(key_history)) != 0) {
+        oled_clear();
+        for (uint8_t index = 0; index < OLED_KEY_HISTORY_SIZE; index++) {
+            oled_write_key_label(OLED_KEY_HISTORY_SIZE - 1 - index, key_history.keys[index]);
+        }
+        memcpy(&rendered_history, &key_history, sizeof(key_history));
+        key_history_rendered = true;
     }
-    memcpy(&rendered_history, &key_history, sizeof(key_history));
-    rendered = true;
+
+    if (timer_elapsed32(last_key_history_update) >= OLED_HISTORY_IDLE_TIMEOUT) {
+        oled_life_seed();
+        oled_life_active = true;
+        oled_life_last_frame = timer_read32();
+    }
 }
 
 static void oled_key_history_sync_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
@@ -345,6 +403,9 @@ static void oled_key_history_sync_handler(uint8_t in_buflen, const void *in_data
 
     if (in_buflen == sizeof(key_history)) {
         memcpy(&key_history, in_data, sizeof(key_history));
+        key_history_rendered = false;
+        oled_life_active = false;
+        last_key_history_update = timer_read32();
     }
 }
 
