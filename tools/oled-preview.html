@@ -251,7 +251,7 @@
             const buffer = framebuffer();
             const icon = visual.iconsByName[document.querySelector("#layer").value];
             drawStatusIcon(buffer, visual.statusCenterX, visual.statusLayerY, icon);
-            if (document.querySelector("#caps").checked) drawStatusIcon(buffer, visual.statusCenterX, visual.statusCapsY, visual.iconsByName.CAPS);
+            if (document.querySelector("#caps").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusCapsY, visual.iconsByName.CAPS);
             if (document.querySelector("#ctrl").checked) drawStatusIcon(buffer, visual.statusLeftX, visual.statusTopModsY, visual.iconsByName.CTRL);
             if (document.querySelector("#alt").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusTopModsY, visual.iconsByName.ALT);
             if (document.querySelector("#gui").checked) drawStatusIcon(buffer, visual.statusLeftX, visual.statusBottomModsY, visual.iconsByName.GUI);

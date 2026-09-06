@@ -208,7 +208,7 @@ static void oled_render_layer_state(void) {
 
     oled_draw_layer_icon(icon);
     if (caps_word_active) {
-        oled_draw_status_icon(OLED_STATUS_CENTER_X, OLED_STATUS_CAPS_Y, OLED_ICON_CAPS);
+        oled_draw_status_icon(OLED_STATUS_RIGHT_X, OLED_STATUS_CAPS_Y, OLED_ICON_CAPS);
     }
 
     if (mods & MOD_MASK_CTRL) {
