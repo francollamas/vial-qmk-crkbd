@@ -5,7 +5,7 @@ EXTRAFLAGS += -flto=auto
 
 MOUSEKEY_ENABLE     = yes
 OLED_ENABLE         = yes
-EXTRAKEY_ENABLE     = no
+EXTRAKEY_ENABLE     = yes
 COMBO_ENABLE        = no
 
 QMK_SETTINGS        = yes
