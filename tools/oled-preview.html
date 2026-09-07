@@ -143,6 +143,16 @@
     <script>
         const WIDTH = 32;
         const HEIGHT = 128;
+        const GOKU_FRAME_HEIGHT = 96;
+        const GOKU_Y = 32;
+        const GOKU_IDLE_DURATION = 5000;
+        const GOKU_IDLE_FRAME_DURATION = 250;
+        const GOKU_TRANSFORMATION_FRAME_DURATION = 200;
+        const GOKU_TRANSFORMATION_DURATION = GOKU_TRANSFORMATION_FRAME_DURATION * 3;
+        const GOKU_ANIMATIONS = [
+            "base-idle", "base-to-ssj", "ssj-idle", "ssj-to-ssj2", "ssj2-idle",
+            "ssj2-to-ssj3", "ssj3-idle", "ssj3-to-ssj4", "ssj4-idle", "ssj4-to-base",
+        ];
         const sourcePath = document.querySelector("#source-path");
         const fontPath = document.querySelector("#font-path");
         const status = document.querySelector("#status");
@@ -153,6 +163,10 @@
         let historyLastInput = Date.now();
         let historyLife;
         let historyLifeLastFrame;
+        let gokuFrames;
+        let gokuPhase = 0;
+        let gokuTransforming = false;
+        let gokuStateStartedAt;
         let visual;
 
         function extractArray(source, name) {
@@ -256,8 +270,53 @@
             drawIcon(buffer, x, y, String.fromCharCode(icon));
         }
 
+        function gokuIsVisible() {
+            return document.querySelector("#layer").value === "BASE" && !document.querySelector("#caps").checked && !document.querySelector("#ctrl").checked && !document.querySelector("#alt").checked && !document.querySelector("#gui").checked && !document.querySelector("#shift").checked;
+        }
+
+        function currentGokuFrame() {
+            const now = Date.now();
+            if (gokuStateStartedAt === undefined) {
+                gokuPhase = 0;
+                gokuTransforming = false;
+                gokuStateStartedAt = now;
+            }
+
+            let elapsed = now - gokuStateStartedAt;
+            if (!gokuTransforming && elapsed >= GOKU_IDLE_DURATION) {
+                gokuTransforming = true;
+                gokuStateStartedAt = now;
+                elapsed = 0;
+            } else if (gokuTransforming && elapsed >= GOKU_TRANSFORMATION_DURATION) {
+                gokuPhase = (gokuPhase + 1) % 5;
+                gokuTransforming = false;
+                gokuStateStartedAt = now;
+                elapsed = 0;
+            }
+
+            const frame = gokuTransforming ? Math.floor(elapsed / GOKU_TRANSFORMATION_FRAME_DURATION) : Math.floor(elapsed / GOKU_IDLE_FRAME_DURATION) % 3;
+            const animation = gokuPhase * 2 + Number(gokuTransforming);
+            return `${GOKU_ANIMATIONS[animation]}-${frame + 1}`;
+        }
+
+        function drawGokuFrame(buffer) {
+            const pixels = gokuFrames.get(currentGokuFrame());
+            if (!pixels) return;
+            for (let y = 0; y < GOKU_FRAME_HEIGHT; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    const offset = (y * WIDTH + x) * 4;
+                    if (pixels[offset + 3] && pixels[offset] < 128) buffer[GOKU_Y + y][x] = true;
+                }
+            }
+        }
+
         function renderStatus() {
             const buffer = framebuffer();
+            if (gokuIsVisible() && gokuFrames) {
+                drawGokuFrame(buffer);
+                return buffer;
+            }
+            gokuStateStartedAt = undefined;
             const icon = visual.iconsByName[document.querySelector("#layer").value];
             drawStatusIcon(buffer, visual.statusCenterX, visual.statusLayerY, icon);
             if (document.querySelector("#caps").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusCapsY, visual.iconsByName.CAPS);
@@ -266,6 +325,21 @@
             if (document.querySelector("#gui").checked) drawStatusIcon(buffer, visual.statusLeftX, visual.statusBottomModsY, visual.iconsByName.GUI);
             if (document.querySelector("#shift").checked) drawStatusIcon(buffer, visual.statusRightX, visual.statusBottomModsY, visual.iconsByName.SHIFT);
             return buffer;
+        }
+
+        async function loadGokuFrames() {
+            const frames = await Promise.all(GOKU_ANIMATIONS.flatMap((animation) => [1, 2, 3].map(async (frame) => {
+                const image = new Image();
+                image.src = `../goku/frames/${animation}-${frame}.png`;
+                await image.decode();
+                const canvas = document.createElement("canvas");
+                canvas.width = WIDTH;
+                canvas.height = GOKU_FRAME_HEIGHT;
+                const context = canvas.getContext("2d", { willReadFrequently: true });
+                context.drawImage(image, 0, 0);
+                return [`${animation}-${frame}`, context.getImageData(0, 0, WIDTH, GOKU_FRAME_HEIGHT).data];
+            })));
+            gokuFrames = new Map(frames);
         }
 
         function renderKeyHistory() {
@@ -413,6 +487,7 @@
                 visual = parseVisualSource(visualSource);
                 visual.font = extractBdfFont(await fontSource.text());
                 visual.sourceIcons = visual.icons.map((icon) => [...icon]);
+                await loadGokuFrames();
                 historyLife = undefined;
                 historyLastInput = Date.now();
                 populateEditor();
@@ -448,7 +523,7 @@
         document.querySelector("#save-icon").addEventListener("click", saveEditorIcon);
         sourcePath.addEventListener("keydown", (event) => { if (event.key === "Enter") reload(); });
         setInterval(() => {
-            if (visual && advanceHistoryLife()) render();
+            if (visual && (advanceHistoryLife() || gokuIsVisible())) render();
         }, 50);
         reload();
     </script>

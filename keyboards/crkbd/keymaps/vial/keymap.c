@@ -168,7 +168,55 @@ static uint32_t           last_key_history_update;
 static uint32_t           oled_life_last_frame;
 static bool               oled_life_active;
 static uint8_t            oled_life_current[OLED_MATRIX_SIZE];
+static uint8_t            oled_goku_phase;
+static uint32_t           oled_goku_state_started_at;
+static uint8_t            oled_goku_rendered_frame = OLED_GOKU_FRAME_COUNT;
+static bool               oled_goku_transforming;
+static bool               oled_goku_visible;
 
+static void oled_render_goku(void) {
+    uint32_t elapsed;
+
+    if (!oled_goku_visible) {
+        oled_goku_phase            = 0;
+        oled_goku_state_started_at = timer_read32();
+        oled_goku_rendered_frame   = OLED_GOKU_FRAME_COUNT;
+        oled_goku_transforming     = false;
+        oled_goku_visible           = true;
+    }
+
+    elapsed = timer_elapsed32(oled_goku_state_started_at);
+    if (!oled_goku_transforming && elapsed >= OLED_GOKU_IDLE_DURATION) {
+        oled_goku_state_started_at = timer_read32();
+        oled_goku_transforming     = true;
+        elapsed                     = 0;
+    } else if (oled_goku_transforming && elapsed >= OLED_GOKU_TRANSFORMATION_DURATION) {
+        oled_goku_phase            = (oled_goku_phase + 1) % (OLED_GOKU_ANIMATION_COUNT / 2);
+        oled_goku_state_started_at = timer_read32();
+        oled_goku_transforming     = false;
+        elapsed                     = 0;
+    }
+
+    const uint8_t frame = oled_goku_transforming ? elapsed / OLED_GOKU_TRANSFORMATION_FRAME_DURATION
+                                                  : (elapsed / OLED_GOKU_IDLE_FRAME_DURATION) % OLED_GOKU_FRAMES_PER_ANIMATION;
+    const uint8_t  animation   = oled_goku_phase * 2 + oled_goku_transforming;
+    const uint8_t  frame_index = animation * OLED_GOKU_FRAMES_PER_ANIMATION + frame;
+
+    if (frame_index == oled_goku_rendered_frame) {
+        return;
+    }
+
+    oled_clear();
+    for (uint8_t page = 0; page < OLED_GOKU_FRAME_HEIGHT / 8; page++) {
+        for (uint8_t x = 0; x < OLED_GOKU_FRAME_WIDTH; x++) {
+            const uint16_t frame_offset = x + page * OLED_GOKU_FRAME_WIDTH;
+            const uint16_t oled_offset  = x + (page + OLED_GOKU_Y / 8) * OLED_GOKU_FRAME_WIDTH;
+
+            oled_write_raw_byte(pgm_read_byte(&oled_goku_frames[frame_index][frame_offset]), oled_offset);
+        }
+    }
+    oled_goku_rendered_frame = frame_index;
+}
 
 static void oled_render_layer_state(void) {
     static layer_state_t last_layer_state = (layer_state_t)-1;
@@ -177,10 +225,18 @@ static void oled_render_layer_state(void) {
     char          icon = OLED_ICON_BASE;
     const uint8_t mods = get_mods();
     const bool    caps_word_active = is_caps_word_on();
+    const bool    goku_should_show = get_highest_layer(layer_state) == L_BASE && mods == 0 && !caps_word_active;
 
-    if (layer_state == last_layer_state && mods == last_mods && caps_word_active == last_caps_word) {
+    if (goku_should_show) {
+        oled_render_goku();
         return;
     }
+
+    if (layer_state == last_layer_state && mods == last_mods && caps_word_active == last_caps_word && !oled_goku_visible) {
+        return;
+    }
+
+    oled_goku_visible = false;
 
     if (layer_state & L_ADJUST) {
         icon = OLED_ICON_MEDIA;
