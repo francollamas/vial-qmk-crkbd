@@ -49,6 +49,7 @@
 #define OLED_STATUS_LEFT_X           0
 #define OLED_STATUS_RIGHT_X          17
 #define OLED_STATUS_LAYER_Y          0
+#define OLED_STATUS_WPM_Y            8
 #define OLED_STATUS_CAPS_Y           42
 #define OLED_STATUS_TOP_MODS_Y       84
 #define OLED_STATUS_BOTTOM_MODS_Y    105
@@ -122,4 +123,16 @@ static void oled_draw_status_icon(uint8_t x, uint8_t y, char icon) {
 
 static void oled_draw_layer_icon(char icon) {
     oled_draw_icon(OLED_STATUS_CENTER_X, OLED_STATUS_LAYER_Y, icon);
+}
+
+static void oled_draw_wpm(uint8_t wpm) {
+    for (uint8_t y = OLED_STATUS_WPM_Y; y < OLED_STATUS_WPM_Y + OLED_HISTORY_FONT_HEIGHT; y++) {
+        for (uint8_t x = 0; x < OLED_HISTORY_PIXEL_WIDTH; x++) {
+            oled_write_pixel(x, y, false);
+        }
+    }
+
+    oled_draw_history_glyph(OLED_HISTORY_TEXT_X, OLED_STATUS_WPM_Y, wpm >= 100 ? '0' + wpm / 100 : ' ');
+    oled_draw_history_glyph(OLED_HISTORY_TEXT_X + OLED_HISTORY_GLYPH_SPACING, OLED_STATUS_WPM_Y, wpm >= 10 ? '0' + (wpm / 10) % 10 : ' ');
+    oled_draw_history_glyph(OLED_HISTORY_TEXT_X + OLED_HISTORY_GLYPH_SPACING * 2, OLED_STATUS_WPM_Y, '0' + wpm % 10);
 }

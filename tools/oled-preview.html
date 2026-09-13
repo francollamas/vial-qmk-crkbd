@@ -23,7 +23,7 @@
         .panel h2, .display-card h2 { margin: 0 0 14px; font-size: .75rem; letter-spacing: .12em; color: #b8d980; text-transform: uppercase; }
         label { display: grid; gap: 7px; margin: 0 0 14px; color: #c4ccc0; font-size: .82rem; }
         input, select, button { font: inherit; }
-        input[type="text"], select { width: 100%; color: #e8eee4; background: #101310; border: 1px solid #4d594a; border-radius: 6px; padding: 8px; }
+        input[type="text"], input[type="number"], select { width: 100%; color: #e8eee4; background: #101310; border: 1px solid #4d594a; border-radius: 6px; padding: 8px; }
         input[type="checkbox"] { accent-color: #cbe98f; }
         fieldset { margin: 18px 0; padding: 12px; border: 1px solid #3f4a3e; border-radius: 8px; }
         legend { padding: 0 6px; color: #aeb7a9; font-size: .75rem; }
@@ -90,6 +90,9 @@
                         <label><input id="gui" type="checkbox">Gui</label>
                         <label><input id="shift" type="checkbox">Shift</label>
                     </div>
+                    <label>WPM
+                        <input id="wpm" type="number" value="42" min="0" max="255">
+                    </label>
                 </fieldset>
                 <fieldset>
                     <legend>Right key history</legend>
@@ -218,6 +221,7 @@
                 statusLeftX: extractDefine(source, "OLED_STATUS_LEFT_X"),
                 statusRightX: extractDefine(source, "OLED_STATUS_RIGHT_X"),
                 statusLayerY: extractDefine(source, "OLED_STATUS_LAYER_Y"),
+                statusWpmY: extractDefine(source, "OLED_STATUS_WPM_Y"),
                 statusCapsY: extractDefine(source, "OLED_STATUS_CAPS_Y"),
                 statusTopModsY: extractDefine(source, "OLED_STATUS_TOP_MODS_Y"),
                 statusBottomModsY: extractDefine(source, "OLED_STATUS_BOTTOM_MODS_Y"),
@@ -270,6 +274,13 @@
             drawIcon(buffer, x, y, String.fromCharCode(icon));
         }
 
+        function drawWpm(buffer) {
+            const wpm = Math.max(0, Math.min(255, Number.parseInt(document.querySelector("#wpm").value, 10) || 0));
+            const digits = String(wpm).padStart(3, " ");
+
+            [...digits].forEach((digit, index) => drawHistoryGlyph(buffer, visual.historyTextX + index * visual.historyGlyphSpacing, visual.statusWpmY, digit));
+        }
+
         function gokuIsVisible() {
             return document.querySelector("#layer").value === "BASE" && !document.querySelector("#caps").checked && !document.querySelector("#ctrl").checked && !document.querySelector("#alt").checked && !document.querySelector("#gui").checked && !document.querySelector("#shift").checked;
         }
@@ -314,6 +325,7 @@
             const buffer = framebuffer();
             if (gokuIsVisible() && gokuFrames) {
                 drawGokuFrame(buffer);
+                drawWpm(buffer);
                 return buffer;
             }
             gokuStateStartedAt = undefined;

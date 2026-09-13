@@ -165,6 +165,7 @@ static bool               key_history_needs_sync;
 static oled_key_history_t rendered_history;
 static bool               key_history_rendered;
 static uint32_t           last_key_history_update;
+static uint32_t           oled_last_input;
 static uint32_t           oled_life_last_frame;
 static bool               oled_life_active;
 static uint8_t            oled_life_current[OLED_MATRIX_SIZE];
@@ -229,6 +230,7 @@ static void oled_render_layer_state(void) {
 
     if (goku_should_show) {
         oled_render_goku();
+        oled_draw_wpm(get_current_wpm());
         return;
     }
 
@@ -504,6 +506,20 @@ void oled_render_logo(void) {
 }
 
 bool oled_task_user(void) {
+#    if OLED_TIMEOUT > 0
+    // Animated frames must not extend the inactivity timeout.
+    if (is_keyboard_master() && timer_elapsed32(oled_last_input) >= OLED_TIMEOUT) {
+        oled_off();
+        return false;
+    }
+
+    // The key-history RPC gives the secondary half its input-activity clock.
+    if (!is_keyboard_master() && timer_elapsed32(last_key_history_update) >= OLED_TIMEOUT) {
+        oled_off();
+        return false;
+    }
+#    endif
+
     if (is_keyboard_master()) {
         oled_render_layer_state();
     } else {
@@ -513,6 +529,10 @@ bool oled_task_user(void) {
 }
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed) {
+        oled_last_input = timer_read32();
+    }
+
     if (is_keyboard_master() && record->event.pressed) {
         for (uint8_t index = OLED_KEY_HISTORY_SIZE - 1; index > 0; index--) {
             key_history.keys[index] = key_history.keys[index - 1];

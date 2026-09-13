@@ -5,6 +5,7 @@ EXTRAFLAGS += -flto=auto
 
 MOUSEKEY_ENABLE     = yes
 OLED_ENABLE         = yes
+WPM_ENABLE          = yes
 EXTRAKEY_ENABLE     = yes
 COMBO_ENABLE        = no
 
